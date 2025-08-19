@@ -158,3 +158,20 @@ plt.grid(True)
 plt.show()
 
 print(f"Final filtered velocity: {velocity_filtered[-1]:.2f} pixels/s")
+
+############################
+#        Constants         #
+############################
+
+rldiameter = 3
+
+pdiameter = 13.083
+g = 9.79
+densityb = 936
+densityl = 872
+pixeltomm = rldiameter/pdiameter
+mmvelocity = velocity_filtered[-1] * pixeltomm
+viscosity = (rldiameter/1000)**2 * g * (densityb-densityl)/(18*mmvelocity/1000)
+print(f"Final mmtopixel: {pixeltomm} mm in a pixel")
+print(f"Final mm velocity: {mmvelocity} mm/s")
+print(f"Final Fluid Viscosity: {viscosity} mm/s")
