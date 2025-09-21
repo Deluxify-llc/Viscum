@@ -40,7 +40,7 @@ def poly3(x, a, b, c, d):
 
 
 # Video file
-video_path = 'Video4.mp4'
+video_path = input("file name: ") #'Video4.mp4'
 cap = cv2.VideoCapture(video_path)
 if not cap.isOpened():
     raise IOError(f"Cannot open video {video_path}")
@@ -49,12 +49,18 @@ frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 fps = cap.get(cv2.CAP_PROP_FPS)
 
 # Hardcoded ROI [x, y, width, height]
-roi_pos = [600, 600, 100, 500]
+roi_x1 = int(input("ROI x1: ")) #600
+roi_y1 = int(input("ROI y1: ")) # 600
+roi_x2 = int(input("ROI x2: ")) # 700
+roi_y2 = int(input("ROI y2: ")) # 1100
+roi_pos = [roi_x1, roi_y1, roi_x2-roi_x1, roi_y2 - roi_y1]
 
 xloc, yloc, frame_num = [], [], []
-
+ball_diameters_pixels = []  # List to store the diameter of the ball in pixels for each frame
+starting_frame = int(input("starting frame: ")) #0
+ending_frame = int(input("ending frame: ")) #65
 # Process frames 75 to 235 (1-based indexing in MATLAB, 0-based in Python)
-for k in range(0, 65):  # Python index starts at 0
+for k in range(starting_frame, ending_frame):  # Python index starts at 0
     cap.set(cv2.CAP_PROP_POS_FRAMES, k)
     ret, frame = cap.read()
     if not ret:
@@ -92,17 +98,22 @@ for k in range(0, 65):  # Python index starts at 0
     region = regions[idx]
 
     ctr = region.centroid  # (row, col)
-    diam = np.mean([region.major_axis_length, region.minor_axis_length])
+
+    # Calculate the diameter of the ball in pixels
+    # We take the average of the major and minor axis lengths for a more robust diameter estimate
+    diameter_pixels = np.mean([region.major_axis_length, region.minor_axis_length])
+    ball_diameters_pixels.append(diameter_pixels)
+
+    w_circ = diameter_pixels
+    theta = np.linspace(0, 2 * np.pi, 100)
+    x_circ = ctr[1] + w_circ * np.cos(theta)
+    y_circ = ctr[0] + w_circ * np.sin(theta)
 
     # Plot for visualization (optional)
     plt.figure(1)
     plt.clf()
     plt.imshow(cropped, cmap='gray')
     plt.plot(ctr[1], ctr[0], 'mx', markersize=10)  # centroid: col=x, row=y
-    w_circ = diam
-    theta = np.linspace(0, 2 * np.pi, 100)
-    x_circ = ctr[1] + w_circ * np.cos(theta)
-    y_circ = ctr[0] + w_circ * np.sin(theta)
     plt.plot(x_circ, y_circ, 'm.', linewidth=3)
     plt.title(f'Frame {k + 1}')
     plt.pause(0.2)
@@ -155,7 +166,28 @@ plt.title('Velocity vs Time (Smoothed)')
 plt.legend()
 plt.grid(True)
 
+# --- NEW CODE FOR PLOTTING DIAMETER ---
+# Check if there are diameter measurements before plotting
+if len(ball_diameters_pixels) > 0:
+    plt.figure(4, figsize=(6, 3.5))
+    plt.plot(time_vec, ball_diameters_pixels, 'go-')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Ball Diameter (pixels)')
+    plt.title('Ball Diameter vs. Time')
+    plt.grid(True)
+else:
+    print("\nNo ball diameters were measured, so a graph could not be created.")
+# --- END OF NEW CODE ---
+
+
 plt.show()
+
+# Calculate the average diameter from the collected measurements
+if ball_diameters_pixels:
+    average_diameter = np.mean(ball_diameters_pixels)
+    print(f"\nAverage ball diameter from analyzed frames: {average_diameter:.2f} pixels")
+else:
+    print("\nCould not detect the ball in any of the frames to calculate the diameter.")
 
 print(f"Final filtered velocity: {velocity_filtered[-1]:.2f} pixels/s")
 
@@ -163,15 +195,14 @@ print(f"Final filtered velocity: {velocity_filtered[-1]:.2f} pixels/s")
 #        Constants         #
 ############################
 
-rldiameter = 3
-
-pdiameter = 13.083
-g = 9.79
-densityb = 936
-densityl = 872
-pixeltomm = rldiameter/pdiameter
+rldiameter = float(input("real diameter of your ball in mm: ")) #3 for me
+pdiameter = average_diameter
+g = float(input("g value in your area: ")) #9.79 in mine
+densityb = float(input("density of your ball: ")) #936 for me
+densityl = float(input("density of your liquid: ")) #872 for me
+pixeltomm = rldiameter / pdiameter
 mmvelocity = velocity_filtered[-1] * pixeltomm
-viscosity = (rldiameter/1000)**2 * g * (densityb-densityl)/(18*mmvelocity/1000)
+viscosity = (rldiameter / 1000) ** 2 * g * (densityb - densityl) / (18 * mmvelocity / 1000)
 print(f"Final mmtopixel: {pixeltomm} mm in a pixel")
 print(f"Final mm velocity: {mmvelocity} mm/s")
 print(f"Final Fluid Viscosity: {viscosity} mm/s")
