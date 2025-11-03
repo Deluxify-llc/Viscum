@@ -25,6 +25,7 @@ Authors:
 Created: 2025-06-15
 Version: 1.0
 """
+import math
 
 import cv2
 import numpy as np
@@ -47,7 +48,7 @@ if not cap.isOpened():
 
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 fps = cap.get(cv2.CAP_PROP_FPS)
-
+print(f"fps: {fps}, frames: {frame_count}")
 # Hardcoded ROI [x, y, width, height]
 roi_x1 = int(input("ROI x1: ")) #600
 roi_y1 = int(input("ROI y1: ")) # 600
@@ -55,10 +56,12 @@ roi_x2 = int(input("ROI x2: ")) # 700
 roi_y2 = int(input("ROI y2: ")) # 1100
 roi_pos = [roi_x1, roi_y1, roi_x2-roi_x1, roi_y2 - roi_y1]
 
+
 xloc, yloc, frame_num = [], [], []
 ball_diameters_pixels = []  # List to store the diameter of the ball in pixels for each frame
 starting_frame = int(input("starting frame: ")) #0
 ending_frame = int(input("ending frame: ")) #65
+
 # Process frames 75 to 235 (1-based indexing in MATLAB, 0-based in Python)
 for k in range(starting_frame, ending_frame):  # Python index starts at 0
     cap.set(cv2.CAP_PROP_POS_FRAMES, k)
@@ -82,12 +85,12 @@ for k in range(starting_frame, ending_frame):  # Python index starts at 0
     bw = cv2.bitwise_not(bw)  # invert
 
     # Remove small objects (area < 10 pixels)
-    bw_clean = morphology.remove_small_objects(bw > 0, min_size=10)
-    bw_clean = morphology.remove_small_holes(bw_clean, area_threshold=100)
-    bw_clean = bw_clean.astype(np.uint8) * 255
+    # bw_clean = morphology.remove_small_objects(bw > 0, min_size=10)
+    # bw_clean = morphology.remove_small_holes(bw_clean, area_threshold=100)
+    # bw_clean = bw_clean.astype(np.uint8) * 255
 
     # Find connected components / contours
-    labels = measure.label(bw_clean)
+    labels = measure.label(bw)
     regions = measure.regionprops(labels)
     if not regions:
         continue
@@ -198,7 +201,7 @@ print(f"Final filtered velocity: {velocity_filtered[-1]:.2f} pixels/s")
 rldiameter = float(input("real diameter of your ball in mm: ")) #3 for me
 pdiameter = average_diameter
 g = float(input("g value in your area: ")) #9.79 in mine
-densityb = float(input("density of your ball: ")) #936 for me
+densityb = float(input("density of your ball: ")) #880 for me
 densityl = float(input("density of your liquid: ")) #872 for me
 pixeltomm = rldiameter / pdiameter
 mmvelocity = velocity_filtered[-1] * pixeltomm
@@ -206,3 +209,33 @@ viscosity = (rldiameter / 1000) ** 2 * g * (densityb - densityl) / (18 * mmveloc
 print(f"Final mmtopixel: {pixeltomm} mm in a pixel")
 print(f"Final mm velocity: {mmvelocity} mm/s")
 print(f"Final Fluid Viscosity: {viscosity} mm/s")
+cal = input("Was this a calibration test? ")
+if cal.strip().lower().__eq__('yes'):
+    temp = float(input("What temperature was the liquid at (°C)? "))
+    m40 = float(input("Manufacturer value at 40°C (in cP)? "))
+    m100 = float(input("Manufacturer value at 100°C (in cP)? "))
+
+    # Constants
+    R = 8.314  # J/mol·K
+
+    # Convert to Kelvin
+    T40 = 40 + 273.15
+    T100 = 100 + 273.15
+    T = temp + 273.15
+
+    # Convert viscosities from cP → Pa·s
+    m40 *= 1e-3
+    m100 *= 1e-3
+
+    # Calculate activation energy and pre-exponential factor
+    Ea = R * math.log(m40 / m100) / (1 / T40 - 1 / T100)
+    A = m40 / math.exp(Ea / (R * T40))
+
+    # Calculate viscosity at the desired temperature (in Pa·s)
+    calculated_visc = A * math.exp(Ea / (R * T))
+
+    print(f"Activation Energy (Ea): {Ea:.2f} J/mol")
+    print(f"Pre-exponential Factor (A): {A:.6e} Pa·s")
+    print(f"Viscosity at {temp}°C: {calculated_visc:.6f} Pa·s")
+    calculated_error = math.fabs((calculated_visc - viscosity)/calculated_visc)
+    print(f"Relative error between calculated and observed viscosity: {calculated_error}")
