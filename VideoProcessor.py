@@ -13,17 +13,11 @@
 # limitations under the License.
 
 """
-Python-based solution for finding viscosity.
+Ball tracking for viscosity measurement
 
-This module provides necessary implementation to process a video of
-ball falling into the liquid of your choice and returns the viscosity.
+Tracks a ball falling through fluid and calculates viscosity
 
-Authors:
-    Aryan Sinha <aryanstarwars@gmail.com>
-    Vibhav Durgesh <vibhavd@gmail.com>
-
-Created: 2025-06-15
-Version: 1.0
+Authors: Aryan Sinha, Vibhav Durgesh
 """
 import math
 
@@ -35,13 +29,119 @@ from scipy.signal import lfilter
 from scipy.optimize import curve_fit
 
 
-# Helper function: polynomial fit for velocity smoothing
+# polynomial for smoothing velocity data
 def poly3(x, a, b, c, d):
     return a * x ** 3 + b * x ** 2 + c * x + d
 
 
-# Video file
-video_path = input("file name: ") #'Video4.mp4'
+class KalmanTracker:
+    # Kalman filter to smooth out tracking noise
+    def __init__(self, initial_x, initial_y, dt=1.0):
+        # state vector: position and velocity
+        self.state = np.array([initial_x, initial_y, 0.0, 0.0], dtype=np.float32)
+
+        # transition matrix
+        self.F = np.array([
+            [1, 0, dt, 0],
+            [0, 1, 0, dt],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ], dtype=np.float32)
+
+        self.H = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0]
+        ], dtype=np.float32)
+
+        self.Q = np.eye(4, dtype=np.float32) * 0.1
+        self.R = np.eye(2, dtype=np.float32) * 10
+        self.P = np.eye(4, dtype=np.float32) * 100
+
+    def predict(self):
+        self.state = self.F @ self.state
+        self.P = self.F @ self.P @ self.F.T + self.Q
+        return self.state[:2]
+
+    def update(self, measurement):
+        measurement = np.array(measurement, dtype=np.float32)
+
+        y = measurement - (self.H @ self.state)
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+
+        self.state = self.state + K @ y
+        self.P = (np.eye(4) - K @ self.H) @ self.P
+
+        return self.state[:2]
+
+
+def find_darkest_circle(image, prev_center=None, expected_radius_range=(10, 30), search_fraction=0.8):
+    # finds the darkest circular region in the image
+    # works better than thresholding for low contrast videos
+
+    height, width = image.shape
+
+    if prev_center is not None:
+        cx_prev, cy_prev = prev_center
+        search_radius = 100
+
+        # search region - ball is falling so extend downward more
+        y_min = max(0, int(cy_prev - search_radius//2))
+        y_max = min(height, int(cy_prev + search_radius*2))
+        x_min = max(0, int(cx_prev - search_radius))
+        x_max = min(width, int(cx_prev + search_radius))
+    else:
+        # first frame - search upper part of image
+        y_min = 0
+        y_max = int(height * 0.6)
+        x_min = 0
+        x_max = width
+
+    best_score = float('inf')
+    best_result = None
+
+    # try different ball sizes
+    for radius in range(expected_radius_range[0], expected_radius_range[1] + 1, 2):
+        mask = np.zeros((radius*2, radius*2), dtype=np.uint8)
+        cv2.circle(mask, (radius, radius), radius, 255, -1)
+
+        step = 5 if prev_center is not None else 7
+        for y in range(max(y_min, radius), min(y_max, height - radius), step):
+            for x in range(max(x_min, radius), min(x_max, width - radius), step):
+                region = image[y-radius:y+radius, x-radius:x+radius]
+
+                if region.shape != mask.shape:
+                    continue
+
+                circle_pixels = region[mask > 0]
+                mean_intensity = np.mean(circle_pixels)
+                std_intensity = np.std(circle_pixels)
+
+                # lower score = darker and more uniform
+                score = mean_intensity + std_intensity * 0.3
+
+                if prev_center is not None:
+                    dist = np.sqrt((x - prev_center[0])**2 + (y - prev_center[1])**2)
+                    dy = y - prev_center[1]
+
+                    score += dist * 0.1
+                    if dy < 0:  # upward motion is bad
+                        score += abs(dy) * 0.5
+
+                if score < best_score:
+                    best_score = score
+                    best_result = (x, y, radius * 2, mean_intensity)
+
+    if best_result is not None:
+        cx, cy, diameter, intensity = best_result
+        confidence = min(1.0, (50 - intensity) / 20)
+        return cx, cy, diameter, max(confidence, 0.3)
+
+    return None, None, None, None
+
+
+# load video
+video_path = input("file name: ")
 cap = cv2.VideoCapture(video_path)
 if not cap.isOpened():
     raise IOError(f"Cannot open video {video_path}")
@@ -49,81 +149,131 @@ if not cap.isOpened():
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 fps = cap.get(cv2.CAP_PROP_FPS)
 print(f"fps: {fps}, frames: {frame_count}")
-# Hardcoded ROI [x, y, width, height]
-roi_x1 = int(input("ROI x1: ")) #600
-roi_y1 = int(input("ROI y1: ")) # 600
-roi_x2 = int(input("ROI x2: ")) # 700
-roi_y2 = int(input("ROI y2: ")) # 1100
+
+# get ROI from user
+roi_x1 = int(input("ROI x1: "))
+roi_y1 = int(input("ROI y1: "))
+roi_x2 = int(input("ROI x2: "))
+roi_y2 = int(input("ROI y2: "))
 roi_pos = [roi_x1, roi_y1, roi_x2-roi_x1, roi_y2 - roi_y1]
 
 
 xloc, yloc, frame_num = [], [], []
-ball_diameters_pixels = []  # List to store the diameter of the ball in pixels for each frame
-starting_frame = int(input("starting frame: ")) #0
-ending_frame = int(input("ending frame: ")) #65
+ball_diameters_pixels = []
+confidences = []
+starting_frame = int(input("starting frame: "))
+ending_frame = int(input("ending frame: "))
 
-# Process frames 75 to 235 (1-based indexing in MATLAB, 0-based in Python)
+kalman_tracker = None
+prev_center = None
+ball_template = None
+dt = 1.0 / fps
+
+print("\nProcessing frames...")
+
+import os
+debug_dir = "debug_detect"
+if not os.path.exists(debug_dir):
+    os.makedirs(debug_dir)
+
+# main tracking loop
 for k in range(starting_frame, ending_frame):  # Python index starts at 0
     cap.set(cv2.CAP_PROP_POS_FRAMES, k)
     ret, frame = cap.read()
     if not ret:
+        print(f"Warning: Could not read frame {k}")
         continue
 
     # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Crop to ROI
     x, y, w, h = roi_pos
     cropped = gray[y:y + h, x:x + w]
 
-    # Display cropped frame (optional)
-    # cv2.imshow('Cropped', cropped)
-    # cv2.waitKey(1)
+    predicted_center = None
+    if kalman_tracker is not None:
+        predicted_center = kalman_tracker.predict()
+        predicted_center = (predicted_center[0], predicted_center[1])
 
-    # Threshold using Otsu
-    _, bw = cv2.threshold(cropped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    bw = cv2.bitwise_not(bw)  # invert
+    # detect ball
+    cx, cy, diameter_pixels, confidence = find_darkest_circle(
+        cropped,
+        prev_center=predicted_center if predicted_center is not None else prev_center,
+        expected_radius_range=(8, 35)
+    )
 
-    # Remove small objects (area < 10 pixels)
-    # bw_clean = morphology.remove_small_objects(bw > 0, min_size=10)
-    # bw_clean = morphology.remove_small_holes(bw_clean, area_threshold=100)
-    # bw_clean = bw_clean.astype(np.uint8) * 255
+    if cx is not None:
+        center = (cx, cy)
+        if kalman_tracker is None:
+            print(f"First frame: Found ball at ({cx:.1f}, {cy:.1f}), diameter={diameter_pixels:.1f}")
+    else:
+        center = None
 
-    # Find connected components / contours
-    labels = measure.label(bw)
-    regions = measure.regionprops(labels)
-    if not regions:
-        continue
+    # fallback to prediction if detection fails
+    if center is None:
+        if kalman_tracker is not None:
+            print(f"Frame {k}: Detection failed, using Kalman prediction")
+            center = predicted_center
+            diameter_pixels = ball_diameters_pixels[-1] if ball_diameters_pixels else 30
+            confidence = 0.3
+        else:
+            print(f"Frame {k}: No detection possible, skipping frame")
+            continue
 
-    # Find largest region by major axis length (approximate as max of major axis length)
-    major_axes = [region.major_axis_length for region in regions]
-    idx = np.argmax(major_axes)
-    region = regions[idx]
+    # Initialize Kalman filter on first successful detection
+    if kalman_tracker is None:
+        kalman_tracker = KalmanTracker(center[0], center[1], dt)
+        print(f"Kalman tracker initialized at frame {k}")
 
-    ctr = region.centroid  # (row, col)
+    # Update Kalman filter with measurement
+    updated_center = kalman_tracker.update([center[0], center[1]])
 
-    # Calculate the diameter of the ball in pixels
-    # We take the average of the major and minor axis lengths for a more robust diameter estimate
-    diameter_pixels = np.mean([region.major_axis_length, region.minor_axis_length])
+    # Use Kalman-smoothed position for better accuracy
+    ctr = (updated_center[1], updated_center[0])  # Convert to (row, col) for consistency
+
     ball_diameters_pixels.append(diameter_pixels)
+    confidences.append(confidence)
 
-    w_circ = diameter_pixels
+    # Draw visualization circle
+    w_circ = diameter_pixels / 2
     theta = np.linspace(0, 2 * np.pi, 100)
-    x_circ = ctr[1] + w_circ * np.cos(theta)
-    y_circ = ctr[0] + w_circ * np.sin(theta)
+    x_circ = center[0] + w_circ * np.cos(theta)
+    y_circ = center[1] + w_circ * np.sin(theta)
 
-    # Plot for visualization (optional)
+    # Plot for visualization
     plt.figure(1)
     plt.clf()
     plt.imshow(cropped, cmap='gray')
-    plt.plot(ctr[1], ctr[0], 'mx', markersize=10)  # centroid: col=x, row=y
-    plt.plot(x_circ, y_circ, 'm.', linewidth=3)
-    plt.title(f'Frame {k + 1}')
-    plt.pause(0.2)
+    plt.plot(center[0], center[1], 'mx', markersize=10, label='Detected')
+    if predicted_center is not None:
+        plt.plot(predicted_center[0], predicted_center[1], 'b+', markersize=8, label='Predicted')
+    plt.plot(x_circ, y_circ, 'm-', linewidth=2)
 
-    xloc.append(ctr[1])
-    yloc.append(ctr[0])
+    # Color code by confidence
+    if confidence > 0.7:
+        color = 'green'
+    elif confidence > 0.4:
+        color = 'yellow'
+    else:
+        color = 'red'
+
+    plt.title(f'Frame {k + 1} | Confidence: {confidence:.2f}', color=color)
+    plt.legend()
+    plt.pause(0.01)
+
+    # Save debug image for first, middle, and last frames
+    if k in [starting_frame, starting_frame + (ending_frame-starting_frame)//2, ending_frame-1]:
+        debug_path = os.path.join(debug_dir, f'frame_{k:04d}_conf_{confidence:.2f}.png')
+        plt.savefig(debug_path, dpi=100, bbox_inches='tight')
+        print(f"Saved debug frame: {debug_path}")
+
+    xloc.append(center[0])
+    yloc.append(center[1])
     frame_num.append(k + 1)
+    prev_center = center
+
+print(f"\nTracking complete! Successfully tracked {len(xloc)} frames")
+print(f"Average confidence: {np.mean(confidences):.2f}")
 
 cap.release()
 plt.close(1)
@@ -145,24 +295,45 @@ plt.title('Droplet Position vs Time')
 plt.grid(True)
 
 # Moving average filter (low-pass)
-window_size = 20
+# Adapt window size based on available frames
+num_frames = len(yloc)
+window_size = min(20, max(3, num_frames // 3))
 b = np.ones(window_size) / window_size
 a = 1
 yloc_filtered = lfilter(b, a, yloc)
 
 # Compute raw velocity (numerical derivative)
-velocity = np.gradient(yloc[24:], time_vec[24:])
-velocity_filtered = np.gradient(yloc_filtered[24:], time_vec[24:])
+# Start from a point that makes sense based on available data
+skip_frames = min(24, max(0, num_frames - 5))  # Ensure we have at least 5 points for velocity
 
-# Fit velocity_filtered with 3rd degree polynomial
-popt, _ = curve_fit(poly3, time_vec[24:], velocity_filtered)
-curvefit_data = poly3(time_vec[24:], *popt)
+if num_frames > skip_frames + 3:
+    velocity = np.gradient(yloc[skip_frames:], time_vec[skip_frames:])
+    velocity_filtered = np.gradient(yloc_filtered[skip_frames:], time_vec[skip_frames:])
+
+    # Fit velocity_filtered with 3rd degree polynomial (only if we have enough points)
+    if len(velocity_filtered) >= 4:
+        popt, _ = curve_fit(poly3, time_vec[skip_frames:], velocity_filtered)
+        curvefit_data = poly3(time_vec[skip_frames:], *popt)
+    else:
+        # Not enough points for polynomial fit, use filtered velocity directly
+        curvefit_data = velocity_filtered
+        popt = None
+else:
+    # Very few frames, just compute velocity from all points
+    velocity = np.gradient(yloc, time_vec)
+    velocity_filtered = np.gradient(yloc_filtered, time_vec)
+    curvefit_data = velocity_filtered
+    skip_frames = 0
+    popt = None
 
 # Plot velocity vs time
 plt.figure(3, figsize=(6, 3.5))
-plt.plot(time_vec[24:], velocity, 'b.', label='Original Velocity')
-plt.plot(time_vec[24:], velocity_filtered, 'r.', label='Filtered Velocity', linewidth=1.5)
-plt.plot(time_vec[24:], curvefit_data, 'm-', linewidth=2, label='Curve fit Velocity')
+plt.plot(time_vec[skip_frames:], velocity, 'b.', label='Original Velocity')
+plt.plot(time_vec[skip_frames:], velocity_filtered, 'r.', label='Filtered Velocity', linewidth=1.5)
+if popt is not None:
+    plt.plot(time_vec[skip_frames:], curvefit_data, 'm-', linewidth=2, label='Curve fit Velocity')
+else:
+    plt.plot(time_vec[skip_frames:], curvefit_data, 'm.', linewidth=1.5, label='Filtered Velocity (no fit)')
 plt.xlabel('Time (s)')
 plt.ylabel('Velocity (pixels/s)')
 plt.title('Velocity vs Time (Smoothed)')
@@ -181,6 +352,20 @@ if len(ball_diameters_pixels) > 0:
 else:
     print("\nNo ball diameters were measured, so a graph could not be created.")
 # --- END OF NEW CODE ---
+
+# --- CONFIDENCE TRACKING PLOT ---
+if len(confidences) > 0:
+    plt.figure(5, figsize=(6, 3.5))
+    plt.plot(time_vec, confidences, 'bo-')
+    plt.axhline(y=0.7, color='g', linestyle='--', label='High confidence')
+    plt.axhline(y=0.4, color='orange', linestyle='--', label='Medium confidence')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Detection Confidence')
+    plt.title('Tracking Confidence vs. Time')
+    plt.legend()
+    plt.ylim([0, 1])
+    plt.grid(True)
+# --- END CONFIDENCE PLOT ---
 
 
 plt.show()
