@@ -71,10 +71,10 @@ class ToolTip:
             foreground="#000000",  # Black text
             relief=tk.SOLID,
             borderwidth=1,
-            font=("Arial", 9, "normal"),
-            padx=8,
-            pady=4,
-            wraplength=300  # Wrap long text
+            font=("Segoe UI", 10, "normal"),
+            padx=10,
+            pady=6,
+            wraplength=350  # Wrap long text
         )
         label.pack()
 

@@ -21,12 +21,25 @@ smooth the trajectory.
 
 Authors: Aryan Sinha, Vibhav Durgesh
 """
+import argparse
 import math
 import os
 
 import cv2
 import numpy as np
+
+# Parse command-line arguments before importing matplotlib
+parser = argparse.ArgumentParser()
+parser.add_argument('--save-plots', action='store_true', help='Save plots to files instead of showing them')
+parser.add_argument('--plots-dir', type=str, default='debug_detect', help='Directory to save plots')
+args = parser.parse_args()
+
+# Set matplotlib backend to non-interactive if saving plots
+import matplotlib
+if args.save_plots:
+    matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
+
 from scipy.signal import lfilter
 from scipy.optimize import curve_fit
 
@@ -191,31 +204,32 @@ for k in range(starting_frame, ending_frame):
     x_circ = center[0] + w_circ * np.cos(theta)
     y_circ = center[1] + w_circ * np.sin(theta)
 
-    # Display current frame with tracking overlay
-    plt.figure(1)
-    plt.clf()
-    plt.imshow(cropped, cmap='gray')
-    plt.plot(center[0], center[1], 'mx', markersize=10, label='Detected')
+    # Display current frame with tracking overlay (only if not saving plots)
+    if not args.save_plots:
+        plt.figure(1)
+        plt.clf()
+        plt.imshow(cropped, cmap='gray')
+        plt.plot(center[0], center[1], 'mx', markersize=10, label='Detected')
 
-    # Show Kalman prediction (if available) to see prediction accuracy
-    if predicted_center is not None:
-        plt.plot(predicted_center[0], predicted_center[1], 'b+', markersize=8, label='Predicted')
+        # Show Kalman prediction (if available) to see prediction accuracy
+        if predicted_center is not None:
+            plt.plot(predicted_center[0], predicted_center[1], 'b+', markersize=8, label='Predicted')
 
-    # Draw circle around detected ball
-    plt.plot(x_circ, y_circ, 'm-', linewidth=2)
+        # Draw circle around detected ball
+        plt.plot(x_circ, y_circ, 'm-', linewidth=2)
 
-    # Color-code the title based on detection confidence
-    # Green = high confidence, Yellow = medium, Red = low/predicted
-    if confidence > 0.7:
-        color = 'green'
-    elif confidence > 0.4:
-        color = 'yellow'
-    else:
-        color = 'red'
+        # Color-code the title based on detection confidence
+        # Green = high confidence, Yellow = medium, Red = low/predicted
+        if confidence > 0.7:
+            color = 'green'
+        elif confidence > 0.4:
+            color = 'yellow'
+        else:
+            color = 'red'
 
-    plt.title(f'Frame {k + 1} | Confidence: {confidence:.2f}', color=color)
-    plt.legend()
-    plt.pause(0.01)  # Brief pause to update display
+        plt.title(f'Frame {k + 1} | Confidence: {confidence:.2f}', color=color)
+        plt.legend()
+        plt.pause(0.01)  # Brief pause to update display
 
     # Save debug images for key frames (first, middle, last)
     # This helps diagnose tracking issues later
@@ -330,8 +344,34 @@ if len(confidences) > 0:
     plt.ylim([0, 1])
     plt.grid(True)
 
-# Display all plots
-plt.show()
+# Save plots to files or display them
+if args.save_plots:
+    # Save all figures to files
+    print(f"\nSaving plots to {args.plots_dir}/...")
+
+    plt.figure(2)
+    plt.savefig(os.path.join(args.plots_dir, 'plot_position.png'), dpi=100, bbox_inches='tight')
+    print(f"Saved: {os.path.join(args.plots_dir, 'plot_position.png')}")
+
+    plt.figure(3)
+    plt.savefig(os.path.join(args.plots_dir, 'plot_velocity.png'), dpi=100, bbox_inches='tight')
+    print(f"Saved: {os.path.join(args.plots_dir, 'plot_velocity.png')}")
+
+    if len(ball_diameters_pixels) > 0:
+        plt.figure(4)
+        plt.savefig(os.path.join(args.plots_dir, 'plot_diameter.png'), dpi=100, bbox_inches='tight')
+        print(f"Saved: {os.path.join(args.plots_dir, 'plot_diameter.png')}")
+
+    if len(confidences) > 0:
+        plt.figure(5)
+        plt.savefig(os.path.join(args.plots_dir, 'plot_confidence.png'), dpi=100, bbox_inches='tight')
+        print(f"Saved: {os.path.join(args.plots_dir, 'plot_confidence.png')}")
+
+    plt.close('all')  # Close all figures
+    print("All plots saved successfully.")
+else:
+    # Display all plots (original behavior for command-line use)
+    plt.show()
 
 # Calculate average ball diameter in pixels
 # This is needed to convert pixel measurements to real-world units
@@ -386,7 +426,18 @@ velocity_mm_s = velocity_filtered[-1] * mm_per_pixel
 #   g = gravitational acceleration (m/s²)
 #   ρ_ball, ρ_fluid = densities (kg/m³)
 #   v = terminal velocity (m/s)
-viscosity = (real_diameter_mm / 1000) ** 2 * g * (ball_density_kg_m3 - liquid_density_kg_m3) / (18 * velocity_mm_s / 1000)
+
+# Check for zero velocity to avoid division by zero
+if velocity_mm_s == 0:
+    print("\n⚠ WARNING: Ball velocity is zero!")
+    print("This usually means the ball was not successfully tracked.")
+    print("Please check:")
+    print("  - ROI includes the ball's falling path")
+    print("  - Frame range captures ball motion")
+    print("  - Ball is visible and contrasts with background")
+    viscosity = float('inf')  # Set to infinity to indicate error
+else:
+    viscosity = (real_diameter_mm / 1000) ** 2 * g * (ball_density_kg_m3 - liquid_density_kg_m3) / (18 * velocity_mm_s / 1000)
 
 # Display results
 print(f"Final mm per pixel: {mm_per_pixel} mm/pixel")

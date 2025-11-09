@@ -6,18 +6,31 @@ Viscum is a computer vision-based tool that tracks a ball falling through fluid 
 
 ## Features
 
-- **User-friendly GUI** with intuitive interface
-- **Multi-language support** - Automatically detects your system language
+### Modern Professional GUI
+- **Clean 2-tab interface** - Setup and Results in one seamless view
+- **Side-by-side layout** - See video preview while configuring settings
+- **Larger, readable fonts** (Segoe UI, 11-16pt) for better visibility
+- **No popup windows** - All messages and results embedded in the interface
+- **Embedded graphs** - Position, velocity, diameter, and confidence charts displayed inline
+- **Smart button states** - Buttons enable/disable based on context
+- **Input validation** - Real-time visual feedback with color-coded entry fields
+- **Resizable panes** - Adjust the layout to your preference
+
+### Multi-language Support
+- **Automatic language detection** - Uses your system language
   - Fully supported: English, Spanish (Español)
   - Partial support: Chinese (中文), Hindi (हिन्दी), French (Français), German (Deutsch)
   - Easy to add new languages
 - **Interactive tooltips** - Hover over any field for detailed explanations
+
+### Advanced Analysis
 - **Advanced ball tracking** using Kalman filtering
 - **Works with low-contrast and opaque fluids**
-- **Automatic ROI** (Region of Interest) selection
+- **Interactive ROI selection** - Click and drag on video to select region
 - **Real-time preview** and frame navigation
 - **Calibration mode** for validation with known fluids
-- **Detailed results** visualization with confidence metrics
+- **Confidence metrics** - Understand tracking quality with color-coded indicators
+- **Detailed results** with graphs and exportable data
 - **Cross-platform support** (Windows, macOS, Linux)
 
 ## Quick Start
@@ -169,30 +182,38 @@ Then follow the prompts to enter parameters.
 
 ## How to Use the GUI
 
-### 1. Load Your Video
+The GUI features a **clean 2-tab interface** for an intuitive workflow:
+
+### Tab 1: Main (Setup & Preview)
+
+The Main tab has a **side-by-side layout**: configuration controls on the left, video preview on the right.
+
+#### Left Pane: Configuration
+
+**1. Load Your Video**
 - Click **"Browse Video"** and select your video file (.mp4, .avi, .mov, .mkv)
 - Video information (FPS, frame count) will be displayed
 
-### 2. Select the ROI (Region of Interest)
-- Click **"Select ROI on Video"**
-- Click and drag on the preview to select the area where the ball falls
+**2. Set ROI (Region of Interest)**
+- Click **"Select ROI on Video"** button
+- Click and drag on the video preview (right pane) to select the area where the ball falls
 - Or manually enter coordinates in the X1, Y1, X2, Y2 fields
+- ROI will be shown as a green rectangle on the preview
 
-### 3. Set Frame Range
+**3. Set Frame Range**
 - Enter the **Start Frame** (when ball enters ROI)
 - Enter the **End Frame** (before ball exits ROI)
-- Use **"Preview Frame"** to navigate and find the right frames
-- Use the navigation controls (◀◀ ◀ ▶ ▶▶) to scrub through the video
+- Use the frame navigation controls to find the right frames
 
-### 4. Enter Ball Properties
+**4. Enter Ball Properties**
 - **Diameter (mm)**: Real-world diameter of the ball
 - **Density (kg/m³)**: Density of the ball material
 
-### 5. Enter Liquid Properties
+**5. Enter Liquid Properties**
 - **Density (kg/m³)**: Density of the liquid
 - **Gravity (m/s²)**: Local gravitational acceleration (typically 9.79-9.81)
 
-### 6. (Optional) Calibration Mode
+**6. (Optional) Calibration Mode**
 - Check **"This is a calibration test"** if you want to validate results
 - Enter:
   - Temperature (°C)
@@ -200,10 +221,52 @@ Then follow the prompts to enter parameters.
   - Manufacturer viscosity at 100°C (cP)
 - The tool will calculate expected viscosity and show the error
 
-### 7. Run Tracking
-- Click **"Run Tracking"**
-- Wait for processing to complete
-- View results in the popup window
+**7. Run Tracking**
+- Click the **"Run Tracking"** button
+- A confirmation dialog will appear - click "Yes" to proceed
+- Progress bar shows tracking status
+
+#### Right Pane: Video Preview
+
+- Large video canvas showing the selected frame
+- Frame navigation controls (◀◀ ◀ ▶ ▶▶)
+- Frame slider for quick navigation
+- Frame counter showing current/total frames
+- ROI rectangle shown in green when configured
+
+### Tab 2: Results & Messages
+
+After tracking completes, the interface automatically switches to the **Results tab** showing:
+
+**Messages Section** (top)
+- Color-coded status messages (errors, warnings, info)
+- Confirmation dialogs with Yes/No buttons
+- All messages persist for review
+
+**Results Section** (below messages)
+- Calculated values:
+  - Average Ball Diameter
+  - Final Velocity (pixels/s and mm/s)
+  - Pixel to mm Conversion
+  - **Measured Viscosity** (highlighted)
+- Calibration results (if enabled):
+  - Activation Energy
+  - Pre-exponential Factor
+  - Expected Viscosity
+  - Relative Error (color-coded: green if <10%, red if >10%)
+
+**Graphs Section** (scrollable)
+- Ball Position vs Time
+- Velocity vs Time
+- Ball Diameter vs Time
+- Tracking Confidence vs Time
+
+**Save Results**
+- Click **"Save Results"** button to export full output to a text file
+
+**Full Output** (expandable)
+- Complete console output from tracking
+- Includes all debug information
 
 ### Example Parameters (for mineral_oil.mp4)
 
@@ -255,10 +318,11 @@ If in calibration mode:
 
 ```
 Viscum/
-├── ViscumGUI.py               # Main GUI application
+├── ViscumGUI.py               # Main GUI application with 2-tab interface
 ├── VideoProcessor.py          # Core tracking script (command-line)
 ├── viscum_core.py             # Core library (reusable functions/classes)
-├── translations.py            # Multi-language support (6 languages)
+├── ui_theme.py                # Professional UI theme and styling
+├── translations.py            # Multi-language support (English, Spanish, + 4 partial)
 ├── tooltip_helper.py          # Interactive tooltip system
 ├── requirements.txt           # Python dependencies (includes test deps)
 ├── pytest.ini                 # Test configuration

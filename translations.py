@@ -26,6 +26,12 @@ TRANSLATIONS = {
         # Window
         'window_title': 'Viscum - Ball Tracker for Viscosity Measurement',
 
+        # Tabs
+        'tab_main': 'Main',
+        'tab_setup': 'Setup & Configuration',
+        'tab_preview': 'Preview & Navigation',
+        'tab_results': 'Results & Messages',
+
         # Sections
         'section_video': '1. Video Selection',
         'section_roi': '2. ROI Selection',
@@ -36,6 +42,7 @@ TRANSLATIONS = {
         'section_preview': 'Preview',
         'section_calculated': 'Calculated Values',
         'section_calib_results': 'Calibration Results',
+        'section_graphs': 'Graphs',
         'section_full_output': 'Full Output',
 
         # Buttons
@@ -44,6 +51,7 @@ TRANSLATIONS = {
         'btn_preview': 'Preview Frame',
         'btn_run': 'Run Tracking',
         'btn_close': 'Close',
+        'btn_save_results': 'Save Results',
 
         # Labels
         'lbl_x1': 'X1:',
@@ -74,6 +82,10 @@ TRANSLATIONS = {
         'status_complete': 'Tracking complete!',
         'status_error': 'Error occurred',
 
+        # UI hints
+        'roi_hint': 'Click and drag on video to select ROI',
+        'results_placeholder': 'Results will appear here after tracking completes',
+
         # Results window
         'results_title': 'Tracking Results',
         'results_header': 'Viscosity Measurement Results',
@@ -87,6 +99,16 @@ TRANSLATIONS = {
         'result_expected_visc': 'Expected Viscosity:',
         'result_error': 'RELATIVE ERROR:',
         'result_no_parse': 'Could not parse results. See full output below.',
+
+        # Confidence explanation
+        'help_confidence': 'About Confidence Scores',
+        'confidence_title': 'Understanding Confidence Scores',
+        'confidence_intro': 'Confidence indicates how certain the tracking algorithm is about ball detection in each frame.',
+        'confidence_high': '• Green (>0.7): High confidence - Ball clearly detected',
+        'confidence_medium': '• Yellow (0.4-0.7): Medium confidence - Detection approximate',
+        'confidence_low': '• Red (<0.4): Low confidence - Using prediction',
+        'confidence_avg': 'Average confidence should be >0.6 for reliable results.',
+        'confidence_note': 'Low confidence frames use Kalman filter prediction based on previous positions.',
 
         # Dialog titles
         'dialog_select_video': 'Select Video File',
@@ -131,6 +153,12 @@ TRANSLATIONS = {
         # Window
         'window_title': 'Viscum - Rastreador de Bolas para Medición de Viscosidad',
 
+        # Tabs
+        'tab_main': 'Principal',
+        'tab_setup': 'Configuración',
+        'tab_preview': 'Vista Previa y Navegación',
+        'tab_results': 'Resultados y Mensajes',
+
         # Sections
         'section_video': '1. Selección de Video',
         'section_roi': '2. Selección de ROI',
@@ -141,6 +169,7 @@ TRANSLATIONS = {
         'section_preview': 'Vista Previa',
         'section_calculated': 'Valores Calculados',
         'section_calib_results': 'Resultados de Calibración',
+        'section_graphs': 'Gráficos',
         'section_full_output': 'Salida Completa',
 
         # Buttons
@@ -149,6 +178,7 @@ TRANSLATIONS = {
         'btn_preview': 'Vista Previa de Fotograma',
         'btn_run': 'Ejecutar Rastreo',
         'btn_close': 'Cerrar',
+        'btn_save_results': 'Guardar Resultados',
 
         # Labels
         'lbl_x1': 'X1:',
@@ -179,6 +209,10 @@ TRANSLATIONS = {
         'status_complete': '¡Rastreo completo!',
         'status_error': 'Ocurrió un error',
 
+        # UI hints
+        'roi_hint': 'Haga clic y arrastre en el video para seleccionar ROI',
+        'results_placeholder': 'Los resultados aparecerán aquí después de completar el rastreo',
+
         # Results window
         'results_title': 'Resultados del Rastreo',
         'results_header': 'Resultados de Medición de Viscosidad',
@@ -192,6 +226,16 @@ TRANSLATIONS = {
         'result_expected_visc': 'Viscosidad Esperada:',
         'result_error': 'ERROR RELATIVO:',
         'result_no_parse': 'No se pudieron analizar los resultados. Vea la salida completa a continuación.',
+
+        # Confidence explanation
+        'help_confidence': 'Acerca de las Puntuaciones de Confianza',
+        'confidence_title': 'Entendiendo las Puntuaciones de Confianza',
+        'confidence_intro': 'La confianza indica qué tan seguro está el algoritmo de rastreo sobre la detección de la bola en cada fotograma.',
+        'confidence_high': '• Verde (>0.7): Alta confianza - Bola claramente detectada',
+        'confidence_medium': '• Amarillo (0.4-0.7): Confianza media - Detección aproximada',
+        'confidence_low': '• Rojo (<0.4): Baja confianza - Usando predicción',
+        'confidence_avg': 'La confianza promedio debe ser >0.6 para resultados confiables.',
+        'confidence_note': 'Los fotogramas de baja confianza usan predicción del filtro de Kalman basada en posiciones anteriores.',
 
         # Dialog titles
         'dialog_select_video': 'Seleccionar Archivo de Video',
