@@ -201,10 +201,9 @@ Viscum/
 ├── run_gui.bat           # Windows launcher
 ├── run_gui.sh            # macOS/Linux launcher
 ├── README.md             # This file
-├── examples/             # Sample video files
-│   ├── IMG_4128.mp4
-│   ├── Vid.mp4
-│   └── ...
+├── TUTORIAL_SCRIPT.md    # Video tutorial recording guide
+├── examples/             # Sample video file
+│   └── mineral_oil.mp4   # Example: ball falling through mineral oil
 └── tests/                # Test and debug scripts
     ├── debug_frame.py
     ├── test_first_frame.py
