@@ -258,10 +258,19 @@ Viscum/
 ├── run_gui.bat                # Windows launcher
 ├── run_gui.sh                 # macOS/Linux launcher
 ├── README.md                  # This file
-├── TUTORIAL_SCRIPT.md         # Video tutorial recording guide
+├── LICENSE                    # Apache 2.0 license
 ├── .gitignore                 # Git ignore rules
+├── docs/                      # Documentation
+│   ├── README.md              # Documentation index
+│   ├── ALGORITHM.md           # Detailed algorithm documentation
+│   ├── FLOWCHART.md           # Mermaid flowcharts
+│   ├── TUTORIAL_SCRIPT.md     # Video tutorial recording guide
+│   ├── flowchart-detailed.png # (Add this) Full algorithm flowchart
+│   └── flowchart-simplified.png # (Add this) Simple flowchart for slides
 ├── examples/                  # Sample video file
 │   └── mineral_oil.mp4        # Example: ball falling through mineral oil
+├── screenshots/               # Visual documentation (add your own)
+│   └── README.md              # Screenshot guide
 └── tests/                     # Test suite
     ├── __init__.py            # Test package
     ├── README.md              # Test documentation
@@ -305,14 +314,29 @@ Note: A debug_detect/ directory will be created automatically when you run track
 
 ## How It Works
 
-Viscum uses:
-1. **Darkest Circle Detection**: Finds the ball by looking for the darkest circular region
-2. **Kalman Filtering**: Smooths tracking and predicts ball position
-3. **Velocity Calculation**: Computes terminal velocity from position data
-4. **Stokes' Law**: Calculates viscosity from terminal velocity:
-   ```
-   η = (d²g(ρ_ball - ρ_fluid)) / (18v)
-   ```
+Viscum measures viscosity through a 7-step computer vision and physics algorithm:
+
+1. **Video Input**: Load video and define ROI (Region of Interest)
+2. **Ball Detection**: Locate ball using darkest circle algorithm
+3. **Kalman Filtering**: Smooth trajectory and predict position
+4. **Position Tracking**: Record ball position over time
+5. **Velocity Calculation**: Compute terminal velocity using numerical differentiation
+6. **Unit Conversion**: Convert pixels to real-world measurements
+7. **Stokes' Law**: Calculate viscosity from terminal velocity
+
+**Core Equation (Stokes' Law):**
+```
+η = (d²g(ρ_ball - ρ_fluid)) / (18v)
+
+Where:
+  η = dynamic viscosity (Pa·s)
+  d = ball diameter (m)
+  g = gravity (m/s²)
+  ρ = density (kg/m³)
+  v = terminal velocity (m/s)
+```
+
+**📖 For detailed algorithm documentation, see [ALGORITHM.md](docs/ALGORITHM.md)**
 
 ## Tips for Best Results
 
