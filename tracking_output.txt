@@ -1,0 +1,29 @@
+<string>:156: RuntimeWarning: overflow encountered in scalar subtract
+<string>:154: RuntimeWarning: overflow encountered in scalar subtract
+file name: IMG_4128.mp4
+fps: 30.0, frames: 117
+ROI x1: 1000
+ROI y1: 1803
+ROI x2: 1200
+ROI y2: 2492
+starting frame: 80
+ending frame: 95
+
+Processing frames with improved opaque fluid tracking...
+Kalman tracker initialized at frame 80
+Saved debug frame: debug_detect\frame_0081_conf_0.96.png
+Saved debug frame: debug_detect\frame_0084_conf_0.83.png
+Saved debug frame: debug_detect\frame_0087_conf_1.29.png
+Saved debug frame: debug_detect\frame_0090_conf_0.89.png
+Saved debug frame: debug_detect\frame_0093_conf_0.77.png
+
+Tracking complete! Successfully tracked 15 frames
+Average confidence: 0.93
+
+Average ball diameter from analyzed frames: 37.53 pixels
+Final filtered velocity: 12.00 pixels/s
+Traceback (most recent call last):
+  File "C:\Users\sinha\PycharmProjects\Viscum\test_tracking.py", line 30, in <module>
+    exec(open("VideoProcessor.py").read())
+  File "<string>", line 552, in <module>
+ValueError: could not convert string to float: ''
