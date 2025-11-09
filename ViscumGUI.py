@@ -8,11 +8,17 @@ import numpy as np
 from PIL import Image, ImageTk
 import threading
 import os
+from translations import Translator
+from tooltip_helper import create_tooltip
 
 class ViscumGUI:
-    def __init__(self, root):
+    def __init__(self, root, language=None):
         self.root = root
-        self.root.title("Viscum - Ball Tracker")
+
+        # Initialize translator (auto-detects system language if not specified)
+        self.t = Translator(language)
+
+        self.root.title(self.t['window_title'])
         self.root.geometry("1200x800")
 
         # tkinter variables
@@ -71,110 +77,174 @@ class ViscumGUI:
         canvas.configure(yscrollcommand=scrollbar.set)
 
         # video selection section
-        video_frame = ttk.LabelFrame(scrollable_frame, text="1. Video Selection", padding=10)
+        video_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_video'], padding=10)
         video_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(video_frame, text="Browse Video", command=self.browse_video).pack(fill=tk.X, pady=2)
+        browse_btn = ttk.Button(video_frame, text=self.t['btn_browse'], command=self.browse_video)
+        browse_btn.pack(fill=tk.X, pady=2)
+        create_tooltip(browse_btn, self.t['tooltip_browse'])
+
         ttk.Label(video_frame, textvariable=self.video_path, wraplength=300, foreground="blue").pack(fill=tk.X, pady=2)
 
-        self.video_info_label = ttk.Label(video_frame, text="No video loaded", foreground="gray")
+        self.video_info_label = ttk.Label(video_frame, text=self.t['status_no_video'], foreground="gray")
         self.video_info_label.pack(fill=tk.X, pady=2)
 
         # ROI selection
-        roi_frame = ttk.LabelFrame(scrollable_frame, text="2. ROI Selection", padding=10)
+        roi_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_roi'], padding=10)
         roi_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(roi_frame, text="Select ROI on Video", command=self.select_roi_interactive).pack(fill=tk.X, pady=2)
+        select_roi_btn = ttk.Button(roi_frame, text=self.t['btn_select_roi'], command=self.select_roi_interactive)
+        select_roi_btn.pack(fill=tk.X, pady=2)
+        create_tooltip(select_roi_btn, self.t['tooltip_select_roi'])
 
         roi_grid = ttk.Frame(roi_frame)
         roi_grid.pack(fill=tk.X, pady=5)
 
-        ttk.Label(roi_grid, text="X1:").grid(row=0, column=0, sticky=tk.W, padx=2)
-        ttk.Entry(roi_grid, textvariable=self.roi_x1, width=8).grid(row=0, column=1, padx=2)
-        ttk.Label(roi_grid, text="Y1:").grid(row=0, column=2, sticky=tk.W, padx=2)
-        ttk.Entry(roi_grid, textvariable=self.roi_y1, width=8).grid(row=0, column=3, padx=2)
+        x1_label = ttk.Label(roi_grid, text=self.t['lbl_x1'])
+        x1_label.grid(row=0, column=0, sticky=tk.W, padx=2)
+        create_tooltip(x1_label, self.t['tooltip_roi_x1'])
+        x1_entry = ttk.Entry(roi_grid, textvariable=self.roi_x1, width=8)
+        x1_entry.grid(row=0, column=1, padx=2)
+        create_tooltip(x1_entry, self.t['tooltip_roi_x1'])
 
-        ttk.Label(roi_grid, text="X2:").grid(row=1, column=0, sticky=tk.W, padx=2)
-        ttk.Entry(roi_grid, textvariable=self.roi_x2, width=8).grid(row=1, column=1, padx=2)
-        ttk.Label(roi_grid, text="Y2:").grid(row=1, column=2, sticky=tk.W, padx=2)
-        ttk.Entry(roi_grid, textvariable=self.roi_y2, width=8).grid(row=1, column=3, padx=2)
+        y1_label = ttk.Label(roi_grid, text=self.t['lbl_y1'])
+        y1_label.grid(row=0, column=2, sticky=tk.W, padx=2)
+        create_tooltip(y1_label, self.t['tooltip_roi_y1'])
+        y1_entry = ttk.Entry(roi_grid, textvariable=self.roi_y1, width=8)
+        y1_entry.grid(row=0, column=3, padx=2)
+        create_tooltip(y1_entry, self.t['tooltip_roi_y1'])
+
+        x2_label = ttk.Label(roi_grid, text=self.t['lbl_x2'])
+        x2_label.grid(row=1, column=0, sticky=tk.W, padx=2)
+        create_tooltip(x2_label, self.t['tooltip_roi_x2'])
+        x2_entry = ttk.Entry(roi_grid, textvariable=self.roi_x2, width=8)
+        x2_entry.grid(row=1, column=1, padx=2)
+        create_tooltip(x2_entry, self.t['tooltip_roi_x2'])
+
+        y2_label = ttk.Label(roi_grid, text=self.t['lbl_y2'])
+        y2_label.grid(row=1, column=2, sticky=tk.W, padx=2)
+        create_tooltip(y2_label, self.t['tooltip_roi_y2'])
+        y2_entry = ttk.Entry(roi_grid, textvariable=self.roi_y2, width=8)
+        y2_entry.grid(row=1, column=3, padx=2)
+        create_tooltip(y2_entry, self.t['tooltip_roi_y2'])
 
         # Frame Range
-        frame_frame = ttk.LabelFrame(scrollable_frame, text="3. Frame Range", padding=10)
+        frame_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_frames'], padding=10)
         frame_frame.pack(fill=tk.X, padx=5, pady=5)
 
         frame_grid = ttk.Frame(frame_frame)
         frame_grid.pack(fill=tk.X)
 
-        ttk.Label(frame_grid, text="Start Frame:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(frame_grid, textvariable=self.start_frame, width=10).grid(row=0, column=1, padx=2, pady=2)
+        start_frame_label = ttk.Label(frame_grid, text=self.t['lbl_start_frame'])
+        start_frame_label.grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(start_frame_label, self.t['tooltip_start_frame'])
+        start_frame_entry = ttk.Entry(frame_grid, textvariable=self.start_frame, width=10)
+        start_frame_entry.grid(row=0, column=1, padx=2, pady=2)
+        create_tooltip(start_frame_entry, self.t['tooltip_start_frame'])
 
-        ttk.Label(frame_grid, text="End Frame:").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(frame_grid, textvariable=self.end_frame, width=10).grid(row=1, column=1, padx=2, pady=2)
+        end_frame_label = ttk.Label(frame_grid, text=self.t['lbl_end_frame'])
+        end_frame_label.grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(end_frame_label, self.t['tooltip_end_frame'])
+        end_frame_entry = ttk.Entry(frame_grid, textvariable=self.end_frame, width=10)
+        end_frame_entry.grid(row=1, column=1, padx=2, pady=2)
+        create_tooltip(end_frame_entry, self.t['tooltip_end_frame'])
 
-        ttk.Button(frame_frame, text="Preview Frame", command=self.preview_frame).pack(fill=tk.X, pady=5)
+        preview_btn = ttk.Button(frame_frame, text=self.t['btn_preview'], command=self.preview_frame)
+        preview_btn.pack(fill=tk.X, pady=5)
+        create_tooltip(preview_btn, self.t['tooltip_preview'])
 
         # Ball Properties
-        ball_frame = ttk.LabelFrame(scrollable_frame, text="4. Ball Properties", padding=10)
+        ball_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_ball'], padding=10)
         ball_frame.pack(fill=tk.X, padx=5, pady=5)
 
         ball_grid = ttk.Frame(ball_frame)
         ball_grid.pack(fill=tk.X)
 
-        ttk.Label(ball_grid, text="Diameter (mm):").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(ball_grid, textvariable=self.ball_diameter_mm, width=10).grid(row=0, column=1, padx=2, pady=2)
+        diameter_label = ttk.Label(ball_grid, text=self.t['lbl_diameter'])
+        diameter_label.grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(diameter_label, self.t['tooltip_diameter'])
+        diameter_entry = ttk.Entry(ball_grid, textvariable=self.ball_diameter_mm, width=10)
+        diameter_entry.grid(row=0, column=1, padx=2, pady=2)
+        create_tooltip(diameter_entry, self.t['tooltip_diameter'])
 
-        ttk.Label(ball_grid, text="Density (kg/m³):").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(ball_grid, textvariable=self.ball_density, width=10).grid(row=1, column=1, padx=2, pady=2)
+        ball_density_label = ttk.Label(ball_grid, text=self.t['lbl_ball_density'])
+        ball_density_label.grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(ball_density_label, self.t['tooltip_ball_density'])
+        ball_density_entry = ttk.Entry(ball_grid, textvariable=self.ball_density, width=10)
+        ball_density_entry.grid(row=1, column=1, padx=2, pady=2)
+        create_tooltip(ball_density_entry, self.t['tooltip_ball_density'])
 
         # Liquid Properties
-        liquid_frame = ttk.LabelFrame(scrollable_frame, text="5. Liquid Properties", padding=10)
+        liquid_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_liquid'], padding=10)
         liquid_frame.pack(fill=tk.X, padx=5, pady=5)
 
         liquid_grid = ttk.Frame(liquid_frame)
         liquid_grid.pack(fill=tk.X)
 
-        ttk.Label(liquid_grid, text="Density (kg/m³):").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(liquid_grid, textvariable=self.liquid_density, width=10).grid(row=0, column=1, padx=2, pady=2)
+        liquid_density_label = ttk.Label(liquid_grid, text=self.t['lbl_liquid_density'])
+        liquid_density_label.grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(liquid_density_label, self.t['tooltip_liquid_density'])
+        liquid_density_entry = ttk.Entry(liquid_grid, textvariable=self.liquid_density, width=10)
+        liquid_density_entry.grid(row=0, column=1, padx=2, pady=2)
+        create_tooltip(liquid_density_entry, self.t['tooltip_liquid_density'])
 
-        ttk.Label(liquid_grid, text="Gravity (m/s²):").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
-        ttk.Entry(liquid_grid, textvariable=self.gravity, width=10).grid(row=1, column=1, padx=2, pady=2)
+        gravity_label = ttk.Label(liquid_grid, text=self.t['lbl_gravity'])
+        gravity_label.grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(gravity_label, self.t['tooltip_gravity'])
+        gravity_entry = ttk.Entry(liquid_grid, textvariable=self.gravity, width=10)
+        gravity_entry.grid(row=1, column=1, padx=2, pady=2)
+        create_tooltip(gravity_entry, self.t['tooltip_gravity'])
 
         # calibration test option
-        calib_frame = ttk.LabelFrame(scrollable_frame, text="6. Calibration (Optional)", padding=10)
+        calib_frame = ttk.LabelFrame(scrollable_frame, text=self.t['section_calibration'], padding=10)
         calib_frame.pack(fill=tk.X, padx=5, pady=5)
 
         self.is_calibration = tk.BooleanVar(value=False)
-        ttk.Checkbutton(calib_frame, text="This is a calibration test",
+        calib_checkbox = ttk.Checkbutton(calib_frame, text=self.t['chk_calibration'],
                        variable=self.is_calibration,
-                       command=self.toggle_calibration).pack(anchor=tk.W, pady=2)
+                       command=self.toggle_calibration)
+        calib_checkbox.pack(anchor=tk.W, pady=2)
+        create_tooltip(calib_checkbox, self.t['tooltip_calibration'])
 
         self.calib_inputs = ttk.Frame(calib_frame)
 
-        ttk.Label(self.calib_inputs, text="Temperature (°C):").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        temp_label = ttk.Label(self.calib_inputs, text=self.t['lbl_temperature'])
+        temp_label.grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(temp_label, self.t['tooltip_temperature'])
         self.temp = tk.DoubleVar(value=25.0)
-        ttk.Entry(self.calib_inputs, textvariable=self.temp, width=10).grid(row=0, column=1, padx=2, pady=2)
+        temp_entry = ttk.Entry(self.calib_inputs, textvariable=self.temp, width=10)
+        temp_entry.grid(row=0, column=1, padx=2, pady=2)
+        create_tooltip(temp_entry, self.t['tooltip_temperature'])
 
-        ttk.Label(self.calib_inputs, text="Viscosity @ 40°C (cP):").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        visc_40_label = ttk.Label(self.calib_inputs, text=self.t['lbl_visc_40'])
+        visc_40_label.grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(visc_40_label, self.t['tooltip_visc_40'])
         self.visc_40 = tk.DoubleVar(value=0.0)
-        ttk.Entry(self.calib_inputs, textvariable=self.visc_40, width=10).grid(row=1, column=1, padx=2, pady=2)
+        visc_40_entry = ttk.Entry(self.calib_inputs, textvariable=self.visc_40, width=10)
+        visc_40_entry.grid(row=1, column=1, padx=2, pady=2)
+        create_tooltip(visc_40_entry, self.t['tooltip_visc_40'])
 
-        ttk.Label(self.calib_inputs, text="Viscosity @ 100°C (cP):").grid(row=2, column=0, sticky=tk.W, padx=2, pady=2)
+        visc_100_label = ttk.Label(self.calib_inputs, text=self.t['lbl_visc_100'])
+        visc_100_label.grid(row=2, column=0, sticky=tk.W, padx=2, pady=2)
+        create_tooltip(visc_100_label, self.t['tooltip_visc_100'])
         self.visc_100 = tk.DoubleVar(value=0.0)
-        ttk.Entry(self.calib_inputs, textvariable=self.visc_100, width=10).grid(row=2, column=1, padx=2, pady=2)
+        visc_100_entry = ttk.Entry(self.calib_inputs, textvariable=self.visc_100, width=10)
+        visc_100_entry.grid(row=2, column=1, padx=2, pady=2)
+        create_tooltip(visc_100_entry, self.t['tooltip_visc_100'])
 
         # run button
         run_frame = ttk.Frame(scrollable_frame, padding=10)
         run_frame.pack(fill=tk.X, padx=5, pady=10)
 
-        self.run_button = ttk.Button(run_frame, text="Run Tracking", command=self.run_tracking)
+        self.run_button = ttk.Button(run_frame, text=self.t['btn_run'], command=self.run_tracking)
         self.run_button.pack(fill=tk.X, pady=2)
+        create_tooltip(self.run_button, self.t['tooltip_run'])
 
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(run_frame, variable=self.progress_var, maximum=100)
         self.progress_bar.pack(fill=tk.X, pady=5)
 
-        self.status_label = ttk.Label(run_frame, text="Ready", foreground="green")
+        self.status_label = ttk.Label(run_frame, text=self.t['status_ready'], foreground="green")
         self.status_label.pack(fill=tk.X)
 
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -187,7 +257,7 @@ class ViscumGUI:
             self.calib_inputs.pack_forget()
 
     def setup_right_panel(self, parent):
-        preview_frame = ttk.LabelFrame(parent, text="Preview", padding=10)
+        preview_frame = ttk.LabelFrame(parent, text=self.t['section_preview'], padding=10)
         preview_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self.canvas = tk.Canvas(preview_frame, bg="black", cursor="cross")
@@ -200,22 +270,33 @@ class ViscumGUI:
         nav_frame = ttk.Frame(parent)
         nav_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(nav_frame, text="◀◀", command=lambda: self.navigate_frame(-10)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(nav_frame, text="◀", command=lambda: self.navigate_frame(-1)).pack(side=tk.LEFT, padx=2)
+        backward_fast_btn = ttk.Button(nav_frame, text="◀◀", command=lambda: self.navigate_frame(-10))
+        backward_fast_btn.pack(side=tk.LEFT, padx=2)
+        create_tooltip(backward_fast_btn, self.t['tooltip_nav_backward_fast'])
+
+        backward_btn = ttk.Button(nav_frame, text="◀", command=lambda: self.navigate_frame(-1))
+        backward_btn.pack(side=tk.LEFT, padx=2)
+        create_tooltip(backward_btn, self.t['tooltip_nav_backward'])
 
         self.frame_scale = ttk.Scale(nav_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self.on_frame_scale)
         self.frame_scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        create_tooltip(self.frame_scale, self.t['tooltip_frame_slider'])
 
-        ttk.Button(nav_frame, text="▶", command=lambda: self.navigate_frame(1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(nav_frame, text="▶▶", command=lambda: self.navigate_frame(10)).pack(side=tk.LEFT, padx=2)
+        forward_btn = ttk.Button(nav_frame, text="▶", command=lambda: self.navigate_frame(1))
+        forward_btn.pack(side=tk.LEFT, padx=2)
+        create_tooltip(forward_btn, self.t['tooltip_nav_forward'])
 
-        self.frame_label = ttk.Label(nav_frame, text="Frame: 0/0")
+        forward_fast_btn = ttk.Button(nav_frame, text="▶▶", command=lambda: self.navigate_frame(10))
+        forward_fast_btn.pack(side=tk.LEFT, padx=2)
+        create_tooltip(forward_fast_btn, self.t['tooltip_nav_forward_fast'])
+
+        self.frame_label = ttk.Label(nav_frame, text=self.t.get('lbl_frame', current=0, total=0))
         self.frame_label.pack(side=tk.LEFT, padx=10)
 
     def browse_video(self):
         filename = filedialog.askopenfilename(
-            title="Select Video File",
-            filetypes=[("Video files", "*.mp4 *.avi *.mov *.mkv"), ("All files", "*.*")]
+            title=self.t['dialog_select_video'],
+            filetypes=[(self.t['dialog_video_files'], "*.mp4 *.avi *.mov *.mkv"), (self.t['dialog_all_files'], "*.*")]
         )
 
         if filename:
@@ -229,14 +310,14 @@ class ViscumGUI:
         self.cap = cv2.VideoCapture(path)
 
         if not self.cap.isOpened():
-            messagebox.showerror("Error", "Could not open video file")
+            messagebox.showerror(self.t['error_title'], self.t['error_open_video'])
             return
 
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self.video_info_label.config(
-            text=f"FPS: {self.fps:.1f} | Frames: {self.total_frames}",
+            text=self.t.get('status_video_loaded', fps=self.fps, frames=self.total_frames),
             foreground="green"
         )
 
@@ -294,7 +375,7 @@ class ViscumGUI:
             self.canvas.create_image(0, 0, anchor=tk.NW, image=photo)
             self.canvas.image = photo  # Keep reference
 
-            self.frame_label.config(text=f"Frame: {frame_num}/{self.total_frames-1}")
+            self.frame_label.config(text=self.t.get('lbl_frame', current=frame_num, total=self.total_frames-1))
             self.frame_scale.set(frame_num)
         finally:
             self.updating_frame = False
@@ -311,17 +392,17 @@ class ViscumGUI:
 
     def preview_frame(self):
         if not self.cap:
-            messagebox.showwarning("Warning", "Please load a video first")
+            messagebox.showwarning(self.t['warn_title'], self.t['warn_no_video'])
             return
         self.show_frame(self.start_frame.get())
 
     def select_roi_interactive(self):
         if not self.cap:
-            messagebox.showwarning("Warning", "Please load a video first")
+            messagebox.showwarning(self.t['warn_title'], self.t['warn_no_video'])
             return
 
         self.selecting_roi = True
-        self.status_label.config(text="Click and drag to select ROI", foreground="blue")
+        self.status_label.config(text=self.t['status_roi_select'], foreground="blue")
 
     def on_canvas_click(self, event):
         if self.selecting_roi and self.current_frame is not None and self.display_scale > 0:
@@ -346,11 +427,11 @@ class ViscumGUI:
         if self.selecting_roi:
             self.selecting_roi = False
             self.roi_start = None
-            self.status_label.config(text="ROI selected", foreground="green")
+            self.status_label.config(text=self.t['status_roi_selected'], foreground="green")
 
     def run_tracking(self):
         if not self.video_path.get():
-            messagebox.showwarning("Warning", "Please select a video file")
+            messagebox.showwarning(self.t['warn_title'], self.t['warn_select_video'])
             return
 
         # Run in separate thread
@@ -360,7 +441,7 @@ class ViscumGUI:
 
     def execute_tracking(self):
         self.run_button.config(state="disabled")
-        self.status_label.config(text="Running tracking...", foreground="orange")
+        self.status_label.config(text=self.t['status_running'], foreground="orange")
 
         # Create parameters file
         params_file = "temp_params.txt"
@@ -407,7 +488,7 @@ class ViscumGUI:
 
     def tracking_complete(self, result):
         self.run_button.config(state="normal")
-        self.status_label.config(text="Tracking complete!", foreground="green")
+        self.status_label.config(text=self.t['status_complete'], foreground="green")
         self.progress_var.set(100)
 
         # Parse results from output
@@ -469,7 +550,7 @@ class ViscumGUI:
     def show_results_window(self, results, full_output):
         # Create results window
         results_window = tk.Toplevel(self.root)
-        results_window.title("Tracking Results")
+        results_window.title(self.t['results_title'])
         results_window.geometry("600x500")
 
         # Main frame
@@ -477,36 +558,36 @@ class ViscumGUI:
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Title
-        title = ttk.Label(main_frame, text="Viscosity Measurement Results",
+        title = ttk.Label(main_frame, text=self.t['results_header'],
                          font=('Arial', 14, 'bold'))
         title.pack(pady=(0, 15))
 
         # Results frame
-        results_frame = ttk.LabelFrame(main_frame, text="Calculated Values", padding=15)
+        results_frame = ttk.LabelFrame(main_frame, text=self.t['section_calculated'], padding=15)
         results_frame.pack(fill=tk.X, pady=10)
 
         if results:
             row = 0
             if 'avg_diameter' in results:
-                ttk.Label(results_frame, text="Average Ball Diameter:",
+                ttk.Label(results_frame, text=self.t['result_avg_diameter'],
                          font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=5)
                 ttk.Label(results_frame, text=results['avg_diameter']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
                 row += 1
 
             if 'velocity' in results:
-                ttk.Label(results_frame, text="Final Velocity (pixels/s):",
+                ttk.Label(results_frame, text=self.t['result_velocity_px'],
                          font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=5)
                 ttk.Label(results_frame, text=results['velocity']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
                 row += 1
 
             if 'mm_per_pixel' in results:
-                ttk.Label(results_frame, text="Pixel to mm Conversion:",
+                ttk.Label(results_frame, text=self.t['result_mm_per_px'],
                          font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=5)
                 ttk.Label(results_frame, text=results['mm_per_pixel']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
                 row += 1
 
             if 'mm_velocity' in results:
-                ttk.Label(results_frame, text="Velocity (mm/s):",
+                ttk.Label(results_frame, text=self.t['result_velocity_mm'],
                          font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=5)
                 ttk.Label(results_frame, text=results['mm_velocity']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=5)
                 row += 1
@@ -519,7 +600,7 @@ class ViscumGUI:
                 visc_frame = ttk.Frame(results_frame, relief=tk.RIDGE, borderwidth=2)
                 visc_frame.grid(row=row, column=0, columnspan=2, sticky=tk.EW, pady=10)
 
-                ttk.Label(visc_frame, text="MEASURED VISCOSITY:",
+                ttk.Label(visc_frame, text=self.t['result_viscosity'],
                          font=('Arial', 12, 'bold'), foreground='blue').pack(side=tk.LEFT, padx=10, pady=10)
                 ttk.Label(visc_frame, text=results['viscosity'],
                          font=('Arial', 12, 'bold'), foreground='green').pack(side=tk.LEFT, padx=10, pady=10)
@@ -531,24 +612,24 @@ class ViscumGUI:
                 row += 1
 
                 # Calibration section
-                calib_label = ttk.Label(results_frame, text="Calibration Results",
+                calib_label = ttk.Label(results_frame, text=self.t['section_calib_results'],
                                        font=('Arial', 11, 'bold', 'underline'))
                 calib_label.grid(row=row, column=0, columnspan=2, pady=5)
                 row += 1
 
                 if 'activation_energy' in results:
-                    ttk.Label(results_frame, text="Activation Energy:",
+                    ttk.Label(results_frame, text=self.t['result_activation_energy'],
                              font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=3)
                     ttk.Label(results_frame, text=results['activation_energy']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=3)
                     row += 1
 
                 if 'pre_exp_factor' in results:
-                    ttk.Label(results_frame, text="Pre-exponential Factor:",
+                    ttk.Label(results_frame, text=self.t['result_pre_exp'],
                              font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=3)
                     ttk.Label(results_frame, text=results['pre_exp_factor']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=3)
                     row += 1
 
-                ttk.Label(results_frame, text="Expected Viscosity:",
+                ttk.Label(results_frame, text=self.t['result_expected_visc'],
                          font=('Arial', 10, 'bold')).grid(row=row, column=0, sticky=tk.W, pady=3)
                 ttk.Label(results_frame, text=results['calculated_viscosity']).grid(row=row, column=1, sticky=tk.W, padx=10, pady=3)
                 row += 1
@@ -570,17 +651,17 @@ class ViscumGUI:
                     error_frame = ttk.Frame(results_frame, relief=tk.RIDGE, borderwidth=2)
                     error_frame.grid(row=row, column=0, columnspan=2, sticky=tk.EW, pady=10)
 
-                    ttk.Label(error_frame, text="RELATIVE ERROR:",
+                    ttk.Label(error_frame, text=self.t['result_error'],
                              font=('Arial', 11, 'bold'), foreground='blue').pack(side=tk.LEFT, padx=10, pady=10)
                     ttk.Label(error_frame, text=error_percent,
                              font=('Arial', 11, 'bold'), foreground=color).pack(side=tk.LEFT, padx=10, pady=10)
                     row += 1
 
         else:
-            ttk.Label(results_frame, text="Could not parse results. See full output below.").pack()
+            ttk.Label(results_frame, text=self.t['result_no_parse']).pack()
 
         # Full output
-        output_frame = ttk.LabelFrame(main_frame, text="Full Output", padding=10)
+        output_frame = ttk.LabelFrame(main_frame, text=self.t['section_full_output'], padding=10)
         output_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
         # Text widget with scrollbar
@@ -599,14 +680,14 @@ class ViscumGUI:
         text_widget.config(state=tk.DISABLED)
 
         # Close button
-        ttk.Button(main_frame, text="Close", command=results_window.destroy).pack(pady=10)
+        ttk.Button(main_frame, text=self.t['btn_close'], command=results_window.destroy).pack(pady=10)
 
     def tracking_error(self, error_msg):
         self.run_button.config(state="normal")
-        self.status_label.config(text="Error occurred", foreground="red")
+        self.status_label.config(text=self.t['status_error'], foreground="red")
         self.progress_var.set(0)
 
-        messagebox.showerror("Error", f"Tracking failed:\n{error_msg}")
+        messagebox.showerror(self.t['error_title'], self.t.get('error_tracking_failed', error=error_msg))
 
 
 def main():

@@ -1,9 +1,9 @@
-numpy<2.0
-opencv-python
+numpy>=2.0
+opencv-python>=4.0
 scikit-image
 scipy
 matplotlib
-Pillow
+Pillow>=10.0
 
 # Testing
 pytest>=7.0.0

@@ -6,14 +6,19 @@ Viscum is a computer vision-based tool that tracks a ball falling through fluid 
 
 ## Features
 
-- User-friendly GUI for easy operation
-- Advanced ball tracking using Kalman filtering
-- Works with low-contrast and opaque fluids
-- Automatic ROI (Region of Interest) selection
-- Real-time preview and frame navigation
-- Calibration mode for validation
-- Detailed results visualization with confidence metrics
-- Cross-platform support (Windows, macOS, Linux)
+- **User-friendly GUI** with intuitive interface
+- **Multi-language support** - Automatically detects your system language
+  - Fully supported: English, Spanish (Español)
+  - Partial support: Chinese (中文), Hindi (हिन्दी), French (Français), German (Deutsch)
+  - Easy to add new languages
+- **Interactive tooltips** - Hover over any field for detailed explanations
+- **Advanced ball tracking** using Kalman filtering
+- **Works with low-contrast and opaque fluids**
+- **Automatic ROI** (Region of Interest) selection
+- **Real-time preview** and frame navigation
+- **Calibration mode** for validation with known fluids
+- **Detailed results** visualization with confidence metrics
+- **Cross-platform support** (Windows, macOS, Linux)
 
 ## Quick Start
 
@@ -253,6 +258,8 @@ Viscum/
 ├── ViscumGUI.py               # Main GUI application
 ├── VideoProcessor.py          # Core tracking script (command-line)
 ├── viscum_core.py             # Core library (reusable functions/classes)
+├── translations.py            # Multi-language support (6 languages)
+├── tooltip_helper.py          # Interactive tooltip system
 ├── requirements.txt           # Python dependencies (includes test deps)
 ├── pytest.ini                 # Test configuration
 ├── run_gui.bat                # Windows launcher
@@ -269,8 +276,6 @@ Viscum/
 │   └── flowchart-simplified.png # (Add this) Simple flowchart for slides
 ├── examples/                  # Sample video file
 │   └── mineral_oil.mp4        # Example: ball falling through mineral oil
-├── screenshots/               # Visual documentation (add your own)
-│   └── README.md              # Screenshot guide
 └── tests/                     # Test suite
     ├── __init__.py            # Test package
     ├── README.md              # Test documentation
@@ -413,6 +418,21 @@ Any smartphone or camera that can record:
 - **Best**: 120+ FPS for fast-falling balls
 
 Higher frame rates improve velocity measurement accuracy.
+
+### Can I use Viscum in my language?
+Yes! Viscum supports multiple languages with automatic detection:
+- **Fully translated**: English, Spanish (Español)
+- **Partially translated**: Chinese (中文), Hindi (हिन्दी), French (Français), German (Deutsch)
+
+The GUI automatically detects your system language. Missing translations fall back to English.
+
+**To add or improve translations:**
+1. Edit `translations.py`
+2. Add your language code to `SUPPORTED_LANGUAGES`
+3. Copy the English translations and translate the values
+4. Submit a pull request!
+
+**Tooltips**: Hover over any field for detailed explanations (available in all languages).
 
 ## Running Tests
 
