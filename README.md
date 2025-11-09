@@ -39,13 +39,22 @@ chmod +x run_gui.sh  # macOS/Linux only (only needed once)
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- **Python 3.8 or higher** - [Download here](https://www.python.org/downloads/)
+  - Make sure to check "Add Python to PATH" during installation on Windows
 - A video recording of a ball falling through fluid
 - Known values for:
   - Ball diameter (mm)
   - Ball density (kg/m³)
   - Liquid density (kg/m³)
   - Local gravity (m/s²)
+
+**Check your Python installation:**
+```bash
+python --version   # or python3 --version
+pip --version      # or pip3 --version
+```
+
+If Python is installed but `python` command is not found, try `python3` instead.
 
 ## Installation
 
@@ -75,10 +84,24 @@ venv\Scripts\activate     # On Windows
 pip install -r requirements.txt
 ```
 
+**If `pip` is not found**, try one of these alternatives:
+```bash
+pip3 install -r requirements.txt           # Use pip3 instead
+python -m pip install -r requirements.txt  # Use python's pip module
+python3 -m pip install -r requirements.txt # Use python3's pip module
+```
+
 **Option B: System-wide Installation**
 
 ```bash
 pip install -r requirements.txt
+```
+
+Or if `pip` is not found:
+```bash
+pip3 install -r requirements.txt
+# or
+python3 -m pip install -r requirements.txt
 ```
 
 **Note for macOS Users:** If you get tkinter errors, install python-tk:
@@ -177,6 +200,38 @@ Then follow the prompts to enter parameters.
 - Wait for processing to complete
 - View results in the popup window
 
+### Example Parameters (for mineral_oil.mp4)
+
+Want to test the tool quickly? Use these values with the included `examples/mineral_oil.mp4`:
+
+```
+Video File: examples/mineral_oil.mp4
+ROI Coordinates:
+  - X1: 300
+  - Y1: 100
+  - X2: 500
+  - Y2: 800
+
+Frame Range:
+  - Start Frame: 10
+  - End Frame: 150
+
+Ball Properties:
+  - Diameter: 3 mm
+  - Density: 880 kg/m³
+
+Liquid Properties:
+  - Density: 872 kg/m³
+  - Gravity: 9.79 m/s²
+
+Calibration (optional):
+  - Temperature: 25°C
+  - Viscosity at 40°C: 65 cP
+  - Viscosity at 100°C: 8.8 cP
+```
+
+These values should give you a viscosity measurement around 0.06-0.08 Pa·s with ~5-10% error.
+
 ## Understanding Results
 
 The results window will show:
@@ -195,19 +250,24 @@ If in calibration mode:
 
 ```
 Viscum/
-├── ViscumGUI.py           # Main GUI application
-├── VideoProcessor.py      # Core tracking algorithm
-├── requirements.txt       # Python dependencies
-├── run_gui.bat           # Windows launcher
-├── run_gui.sh            # macOS/Linux launcher
-├── README.md             # This file
-├── TUTORIAL_SCRIPT.md    # Video tutorial recording guide
-├── examples/             # Sample video file
-│   └── mineral_oil.mp4   # Example: ball falling through mineral oil
-└── tests/                # Test and debug scripts
-    ├── debug_frame.py
-    ├── test_first_frame.py
-    └── ...
+├── ViscumGUI.py               # Main GUI application
+├── VideoProcessor.py          # Core tracking script (command-line)
+├── viscum_core.py             # Core library (reusable functions/classes)
+├── requirements.txt           # Python dependencies (includes test deps)
+├── pytest.ini                 # Test configuration
+├── run_gui.bat                # Windows launcher
+├── run_gui.sh                 # macOS/Linux launcher
+├── README.md                  # This file
+├── TUTORIAL_SCRIPT.md         # Video tutorial recording guide
+├── .gitignore                 # Git ignore rules
+├── examples/                  # Sample video file
+│   └── mineral_oil.mp4        # Example: ball falling through mineral oil
+└── tests/                     # Test suite
+    ├── __init__.py            # Test package
+    ├── README.md              # Test documentation
+    ├── test_kalman_tracker.py # Kalman filter tests (9 tests)
+    ├── test_ball_detection.py # Ball detection tests (13 tests)
+    └── test_integration.py    # Integration tests (9 tests)
 
 Note: A debug_detect/ directory will be created automatically when you run tracking.
 ```
@@ -227,7 +287,14 @@ Note: A debug_detect/ directory will be created automatically when you run track
 
 ### Import errors
 - Make sure all dependencies are installed: `pip install -r requirements.txt`
+  - If `pip` not found, use: `python3 -m pip install -r requirements.txt`
 - Check Python version: `python3 --version` (must be 3.8+)
+
+### "pip: command not found" or "pip is not recognized"
+- **Option 1**: Use `pip3` instead of `pip`
+- **Option 2**: Use `python -m pip` or `python3 -m pip`
+- **Option 3 (Windows)**: Reinstall Python and check "Add Python to PATH"
+- **Option 4 (macOS/Linux)**: Install pip with `python3 -m ensurepip --upgrade`
 
 ### GUI not starting
 - Make sure tkinter is available (comes with most Python installations)
@@ -256,6 +323,153 @@ Viscum uses:
 - Use a transparent or semi-transparent container
 - Let the ball reach terminal velocity before the ROI
 - Use multiple measurements and average results
+
+## Frequently Asked Questions (FAQ)
+
+### What video formats work best?
+MP4 format with H.264 encoding is most reliable across platforms. AVI, MOV, and MKV also work. Avoid heavily compressed formats.
+
+### How do I know if my ROI is correct?
+The ROI (Region of Interest) should:
+- Fully contain the ball's path from top to bottom
+- Have minimal extra space around the ball
+- Not include container edges or other objects
+- Be centered on the falling path
+
+Use the **Preview Frame** feature to visually verify the ball stays within the ROI throughout its fall.
+
+### What does 'confidence' mean in the results?
+Confidence indicates how certain the algorithm is about ball detection:
+- **Green (>0.7)**: High confidence - ball clearly detected
+- **Yellow (0.4-0.7)**: Medium confidence - detection may be approximate
+- **Red (<0.4)**: Low confidence - using Kalman prediction
+
+Average confidence should be >0.6 for reliable results.
+
+### My tracking fails or gives wrong results. What should I check?
+
+1. **Ball contrast**: Is the ball the darkest object in the ROI?
+2. **Lighting**: Are there shadows or reflections interfering?
+3. **Frame range**: Did you skip the acceleration phase at the start?
+4. **ROI size**: Is the ROI too large or including background objects?
+5. **Ball size**: Is the ball within the expected radius range (8-35 pixels)?
+
+### How accurate are the viscosity measurements?
+Accuracy depends on:
+- Video quality and frame rate
+- Proper calibration (ball diameter, densities)
+- Ball reaching terminal velocity
+- Laminar flow conditions (Reynolds number < 1)
+
+Typical accuracy: **5-15% error** for well-controlled experiments. Use calibration mode with known fluids to validate.
+
+### Can I use this with transparent or light-colored balls?
+The current algorithm works best with **dark balls** in light fluids. For light balls:
+- Try inverting the video colors in a video editor first
+- Or use a contrasting background
+- Future versions may support bright object detection
+
+### What ball sizes work best?
+- **Too small** (<2mm): Hard to track accurately
+- **Optimal**: 3-6mm diameter balls
+- **Too large** (>10mm): May not reach terminal velocity in reasonable container height
+
+The ball should be clearly visible but small enough to have measurable fall velocity.
+
+### Why do I need manufacturer viscosity values for calibration?
+Calibration mode uses the **Arrhenius equation** to predict viscosity at your test temperature based on manufacturer data at 40°C and 100°C. This helps validate your measurement accuracy. It's optional but recommended for learning.
+
+### Can I use this for non-Newtonian fluids?
+This tool assumes **Newtonian fluids** (constant viscosity). Non-Newtonian fluids (shear-thinning, shear-thickening) will give inconsistent results because Stokes' Law doesn't apply.
+
+### What camera/phone should I use?
+Any smartphone or camera that can record:
+- **Minimum**: 30 FPS, 720p resolution
+- **Recommended**: 60+ FPS, 1080p resolution
+- **Best**: 120+ FPS for fast-falling balls
+
+Higher frame rates improve velocity measurement accuracy.
+
+## Running Tests
+
+Viscum includes a comprehensive test suite to ensure reliability.
+
+### Install Test Dependencies
+
+If you haven't already installed test dependencies:
+
+```bash
+pip install pytest pytest-cov
+```
+
+**If `pip` is not found**, try:
+```bash
+pip3 install pytest pytest-cov
+# or
+python -m pip install pytest pytest-cov
+# or
+python3 -m pip install pytest pytest-cov
+```
+
+Or use the requirements file (already includes test dependencies):
+
+```bash
+pip install -r requirements.txt
+```
+
+To update to the latest versions:
+
+```bash
+pip install --upgrade pytest pytest-cov
+# or if pip is not found:
+python3 -m pip install --upgrade pytest pytest-cov
+```
+
+### Run All Tests
+
+```bash
+# From project root
+pytest
+
+# Or with verbose output
+pytest -v
+
+# Or with coverage report
+pytest --cov=viscum_core --cov-report=term-missing
+```
+
+### Run Specific Tests
+
+```bash
+# Run only Kalman tracker tests
+pytest tests/test_kalman_tracker.py
+
+# Run only ball detection tests
+pytest tests/test_ball_detection.py
+
+# Run only integration tests
+pytest tests/test_integration.py -v
+```
+
+### View Coverage Report
+
+```bash
+# Generate HTML coverage report
+pytest --cov=viscum_core --cov-report=html
+
+# Open in browser (macOS)
+open htmlcov/index.html
+```
+
+### Test Coverage
+
+The test suite includes:
+- **31 tests total** covering core functionality
+- **Unit tests**: Kalman filter, ball detection algorithm
+- **Integration tests**: Real video processing with `mineral_oil.mp4`
+- **97% code coverage** of core modules
+
+See `tests/README.md` for detailed testing documentation.
 
 ## License
 

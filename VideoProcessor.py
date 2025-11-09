@@ -15,193 +15,138 @@
 """
 Ball tracking for viscosity measurement
 
-Tracks a ball falling through fluid and calculates viscosity
+Command-line script that tracks a ball falling through fluid and calculates viscosity
+using Stokes' Law. Uses computer vision to track the ball and Kalman filtering to
+smooth the trajectory.
 
 Authors: Aryan Sinha, Vibhav Durgesh
 """
 import math
+import os
 
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage import measure, morphology
 from scipy.signal import lfilter
 from scipy.optimize import curve_fit
 
-
-# polynomial for smoothing velocity data
-def poly3(x, a, b, c, d):
-    return a * x ** 3 + b * x ** 2 + c * x + d
+# Import core functions from viscum_core library
+from viscum_core import KalmanTracker, find_darkest_circle, poly3
 
 
-class KalmanTracker:
-    # Kalman filter to smooth out tracking noise
-    def __init__(self, initial_x, initial_y, dt=1.0):
-        # state vector: position and velocity
-        self.state = np.array([initial_x, initial_y, 0.0, 0.0], dtype=np.float32)
+# ==============================================================================
+# STEP 1: Load Video and Get User Input
+# ==============================================================================
 
-        # transition matrix
-        self.F = np.array([
-            [1, 0, dt, 0],
-            [0, 1, 0, dt],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1]
-        ], dtype=np.float32)
-
-        self.H = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0]
-        ], dtype=np.float32)
-
-        self.Q = np.eye(4, dtype=np.float32) * 0.1
-        self.R = np.eye(2, dtype=np.float32) * 10
-        self.P = np.eye(4, dtype=np.float32) * 100
-
-    def predict(self):
-        self.state = self.F @ self.state
-        self.P = self.F @ self.P @ self.F.T + self.Q
-        return self.state[:2]
-
-    def update(self, measurement):
-        measurement = np.array(measurement, dtype=np.float32)
-
-        y = measurement - (self.H @ self.state)
-        S = self.H @ self.P @ self.H.T + self.R
-        K = self.P @ self.H.T @ np.linalg.inv(S)
-
-        self.state = self.state + K @ y
-        self.P = (np.eye(4) - K @ self.H) @ self.P
-
-        return self.state[:2]
-
-
-def find_darkest_circle(image, prev_center=None, expected_radius_range=(10, 30), search_fraction=0.8):
-    # finds the darkest circular region in the image
-    # works better than thresholding for low contrast videos
-
-    height, width = image.shape
-
-    if prev_center is not None:
-        cx_prev, cy_prev = prev_center
-        search_radius = 100
-
-        # search region - ball is falling so extend downward more
-        y_min = max(0, int(cy_prev - search_radius//2))
-        y_max = min(height, int(cy_prev + search_radius*2))
-        x_min = max(0, int(cx_prev - search_radius))
-        x_max = min(width, int(cx_prev + search_radius))
-    else:
-        # first frame - search upper part of image
-        y_min = 0
-        y_max = int(height * 0.6)
-        x_min = 0
-        x_max = width
-
-    best_score = float('inf')
-    best_result = None
-
-    # try different ball sizes
-    for radius in range(expected_radius_range[0], expected_radius_range[1] + 1, 2):
-        mask = np.zeros((radius*2, radius*2), dtype=np.uint8)
-        cv2.circle(mask, (radius, radius), radius, 255, -1)
-
-        step = 5 if prev_center is not None else 7
-        for y in range(max(y_min, radius), min(y_max, height - radius), step):
-            for x in range(max(x_min, radius), min(x_max, width - radius), step):
-                region = image[y-radius:y+radius, x-radius:x+radius]
-
-                if region.shape != mask.shape:
-                    continue
-
-                circle_pixels = region[mask > 0]
-                mean_intensity = np.mean(circle_pixels)
-                std_intensity = np.std(circle_pixels)
-
-                # lower score = darker and more uniform
-                score = mean_intensity + std_intensity * 0.3
-
-                if prev_center is not None:
-                    dist = np.sqrt((x - prev_center[0])**2 + (y - prev_center[1])**2)
-                    dy = y - prev_center[1]
-
-                    score += dist * 0.1
-                    if dy < 0:  # upward motion is bad
-                        score += abs(dy) * 0.5
-
-                if score < best_score:
-                    best_score = score
-                    best_result = (x, y, radius * 2, mean_intensity)
-
-    if best_result is not None:
-        cx, cy, diameter, intensity = best_result
-        confidence = min(1.0, (50 - intensity) / 20)
-        return cx, cy, diameter, max(confidence, 0.3)
-
-    return None, None, None, None
-
-
-# load video
+# Load the video file
 video_path = input("file name: ")
 cap = cv2.VideoCapture(video_path)
 if not cap.isOpened():
     raise IOError(f"Cannot open video {video_path}")
 
+# Get video properties
 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 fps = cap.get(cv2.CAP_PROP_FPS)
-print(f"fps: {fps}, frames: {frame_count}")
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print(f"fps: {fps}, frames: {frame_count}, resolution: {frame_width}x{frame_height}")
 
-# get ROI from user
+# Get Region of Interest (ROI) from user
+# ROI defines the rectangular area where the ball falls
 roi_x1 = int(input("ROI x1: "))
 roi_y1 = int(input("ROI y1: "))
 roi_x2 = int(input("ROI x2: "))
 roi_y2 = int(input("ROI y2: "))
-roi_pos = [roi_x1, roi_y1, roi_x2-roi_x1, roi_y2 - roi_y1]
 
+# Validate ROI coordinates
+if roi_x2 <= roi_x1:
+    raise ValueError(f"Invalid ROI: x2 ({roi_x2}) must be greater than x1 ({roi_x1})")
+if roi_y2 <= roi_y1:
+    raise ValueError(f"Invalid ROI: y2 ({roi_y2}) must be greater than y1 ({roi_y1})")
+if roi_x1 < 0 or roi_y1 < 0:
+    raise ValueError(f"Invalid ROI: coordinates must be non-negative (x1={roi_x1}, y1={roi_y1})")
+if roi_x2 > frame_width or roi_y2 > frame_height:
+    raise ValueError(f"Invalid ROI: coordinates exceed frame bounds ({frame_width}x{frame_height}). Got x2={roi_x2}, y2={roi_y2}")
 
-xloc, yloc, frame_num = [], [], []
-ball_diameters_pixels = []
-confidences = []
+# roi_pos format: [x, y, width, height]
+roi_pos = [roi_x1, roi_y1, roi_x2 - roi_x1, roi_y2 - roi_y1]
+print(f"ROI size: {roi_pos[2]}x{roi_pos[3]} pixels")
+
+# Get frame range for tracking
 starting_frame = int(input("starting frame: "))
 ending_frame = int(input("ending frame: "))
 
+# Validate frame range
+if starting_frame < 0:
+    raise ValueError(f"Invalid starting frame: {starting_frame} (must be >= 0)")
+if ending_frame > frame_count:
+    raise ValueError(f"Invalid ending frame: {ending_frame} (video only has {frame_count} frames)")
+if ending_frame <= starting_frame:
+    raise ValueError(f"Invalid frame range: ending frame ({ending_frame}) must be greater than starting frame ({starting_frame})")
+if ending_frame - starting_frame < 5:
+    print(f"Warning: Frame range is very short ({ending_frame - starting_frame} frames). Results may be inaccurate.")
+
+print(f"Tracking {ending_frame - starting_frame} frames ({(ending_frame - starting_frame) / fps:.2f} seconds)")
+
+# ==============================================================================
+# STEP 2: Initialize Tracking Variables
+# ==============================================================================
+
+# Lists to store tracking results
+xloc, yloc, frame_num = [], [], []  # Ball position and frame numbers
+ball_diameters_pixels = []  # Measured ball diameters
+confidences = []  # Detection confidence scores
+
+# Initialize Kalman filter (will be created on first detection)
 kalman_tracker = None
-prev_center = None
-ball_template = None
-dt = 1.0 / fps
+prev_center = None  # Previous ball center for localized search
+dt = 1.0 / fps  # Time step between frames (seconds)
 
-print("\nProcessing frames...")
-
-import os
+# Create debug output directory
 debug_dir = "debug_detect"
 if not os.path.exists(debug_dir):
     os.makedirs(debug_dir)
 
-# main tracking loop
-for k in range(starting_frame, ending_frame):  # Python index starts at 0
+print("\nProcessing frames...")
+
+# ==============================================================================
+# STEP 3: Main Tracking Loop
+# ==============================================================================
+
+# Process each frame in the specified range
+for k in range(starting_frame, ending_frame):
+    # Seek to the specific frame in the video
     cap.set(cv2.CAP_PROP_POS_FRAMES, k)
     ret, frame = cap.read()
     if not ret:
         print(f"Warning: Could not read frame {k}")
         continue
 
-    # Convert to grayscale
+    # Convert frame to grayscale for processing
+    # Ball detection works better with grayscale images
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
+    # Extract the Region of Interest (ROI)
+    # This focuses processing on the area where the ball is falling
     x, y, w, h = roi_pos
     cropped = gray[y:y + h, x:x + w]
 
+    # Get predicted position from Kalman filter (if initialized)
+    # The Kalman filter predicts where the ball should be based on its motion model
     predicted_center = None
     if kalman_tracker is not None:
         predicted_center = kalman_tracker.predict()
         predicted_center = (predicted_center[0], predicted_center[1])
 
-    # detect ball
+    # Detect the ball using the darkest circle algorithm
+    # Uses prediction or previous position to guide the search
     cx, cy, diameter_pixels, confidence = find_darkest_circle(
         cropped,
         prev_center=predicted_center if predicted_center is not None else prev_center,
         expected_radius_range=(8, 35)
     )
 
+    # Process detection result
     if cx is not None:
         center = (cx, cy)
         if kalman_tracker is None:
@@ -209,47 +154,58 @@ for k in range(starting_frame, ending_frame):  # Python index starts at 0
     else:
         center = None
 
-    # fallback to prediction if detection fails
+    # Fallback strategy: use Kalman prediction if detection fails
+    # This helps maintain tracking even when the ball is temporarily obscured
     if center is None:
         if kalman_tracker is not None:
             print(f"Frame {k}: Detection failed, using Kalman prediction")
             center = predicted_center
             diameter_pixels = ball_diameters_pixels[-1] if ball_diameters_pixels else 30
-            confidence = 0.3
+            confidence = 0.3  # Lower confidence for predicted positions
         else:
+            # No detection and no tracker yet - skip this frame
             print(f"Frame {k}: No detection possible, skipping frame")
             continue
 
     # Initialize Kalman filter on first successful detection
+    # The Kalman filter learns the ball's velocity and smooths the trajectory
     if kalman_tracker is None:
         kalman_tracker = KalmanTracker(center[0], center[1], dt)
         print(f"Kalman tracker initialized at frame {k}")
 
-    # Update Kalman filter with measurement
+    # Update Kalman filter with the current measurement
+    # This corrects the prediction with the actual observed position
     updated_center = kalman_tracker.update([center[0], center[1]])
 
-    # Use Kalman-smoothed position for better accuracy
-    ctr = (updated_center[1], updated_center[0])  # Convert to (row, col) for consistency
-
+    # Store measurements for later analysis
     ball_diameters_pixels.append(diameter_pixels)
     confidences.append(confidence)
 
-    # Draw visualization circle
+    # ==============================================================================
+    # Visualization: Draw tracking overlay on each frame
+    # ==============================================================================
+
+    # Create circle outline to show detected ball position
     w_circ = diameter_pixels / 2
     theta = np.linspace(0, 2 * np.pi, 100)
     x_circ = center[0] + w_circ * np.cos(theta)
     y_circ = center[1] + w_circ * np.sin(theta)
 
-    # Plot for visualization
+    # Display current frame with tracking overlay
     plt.figure(1)
     plt.clf()
     plt.imshow(cropped, cmap='gray')
     plt.plot(center[0], center[1], 'mx', markersize=10, label='Detected')
+
+    # Show Kalman prediction (if available) to see prediction accuracy
     if predicted_center is not None:
         plt.plot(predicted_center[0], predicted_center[1], 'b+', markersize=8, label='Predicted')
+
+    # Draw circle around detected ball
     plt.plot(x_circ, y_circ, 'm-', linewidth=2)
 
-    # Color code by confidence
+    # Color-code the title based on detection confidence
+    # Green = high confidence, Yellow = medium, Red = low/predicted
     if confidence > 0.7:
         color = 'green'
     elif confidence > 0.4:
@@ -259,18 +215,20 @@ for k in range(starting_frame, ending_frame):  # Python index starts at 0
 
     plt.title(f'Frame {k + 1} | Confidence: {confidence:.2f}', color=color)
     plt.legend()
-    plt.pause(0.01)
+    plt.pause(0.01)  # Brief pause to update display
 
-    # Save debug image for first, middle, and last frames
+    # Save debug images for key frames (first, middle, last)
+    # This helps diagnose tracking issues later
     if k in [starting_frame, starting_frame + (ending_frame-starting_frame)//2, ending_frame-1]:
         debug_path = os.path.join(debug_dir, f'frame_{k:04d}_conf_{confidence:.2f}.png')
         plt.savefig(debug_path, dpi=100, bbox_inches='tight')
         print(f"Saved debug frame: {debug_path}")
 
+    # Record position and frame number for analysis
     xloc.append(center[0])
     yloc.append(center[1])
     frame_num.append(k + 1)
-    prev_center = center
+    prev_center = center  # Save for next frame's search hint
 
 print(f"\nTracking complete! Successfully tracked {len(xloc)} frames")
 print(f"Average confidence: {np.mean(confidences):.2f}")
@@ -278,15 +236,19 @@ print(f"Average confidence: {np.mean(confidences):.2f}")
 cap.release()
 plt.close(1)
 
-# Convert to numpy arrays
+# ==============================================================================
+# STEP 4: Position and Velocity Analysis
+# ==============================================================================
+
+# Convert tracking data to numpy arrays for numerical processing
 xloc = np.array(xloc)
 yloc = np.array(yloc)
 frame_num = np.array(frame_num)
 
-# Time vector in seconds
+# Create time vector: convert frame numbers to elapsed time in seconds
 time_vec = (frame_num - frame_num[0]) / fps
 
-# Plot raw position vs time
+# Plot raw ball position vs time
 plt.figure(2, figsize=(6, 3.5))
 plt.plot(time_vec, yloc, 'ro-')
 plt.xlabel('Time (s)')
@@ -294,39 +256,41 @@ plt.ylabel('Y Position (pixels)')
 plt.title('Droplet Position vs Time')
 plt.grid(True)
 
-# Moving average filter (low-pass)
-# Adapt window size based on available frames
+# Apply moving average filter to smooth position data
+# This reduces measurement noise before calculating velocity
 num_frames = len(yloc)
-window_size = min(20, max(3, num_frames // 3))
-b = np.ones(window_size) / window_size
+window_size = min(20, max(3, num_frames // 3))  # Adapt to available data
+b = np.ones(window_size) / window_size  # Moving average coefficients
 a = 1
 yloc_filtered = lfilter(b, a, yloc)
 
-# Compute raw velocity (numerical derivative)
-# Start from a point that makes sense based on available data
-skip_frames = min(24, max(0, num_frames - 5))  # Ensure we have at least 5 points for velocity
+# Calculate velocity from position data using numerical differentiation
+# Skip initial frames where the ball may still be accelerating
+skip_frames = min(24, max(0, num_frames - 5))  # Ensure at least 5 points remain
 
 if num_frames > skip_frames + 3:
+    # Sufficient data: compute velocities using gradient (numerical derivative)
     velocity = np.gradient(yloc[skip_frames:], time_vec[skip_frames:])
     velocity_filtered = np.gradient(yloc_filtered[skip_frames:], time_vec[skip_frames:])
 
-    # Fit velocity_filtered with 3rd degree polynomial (only if we have enough points)
+    # Fit smoothed velocity with polynomial for even better smoothing
+    # This helps extract the terminal velocity accurately
     if len(velocity_filtered) >= 4:
         popt, _ = curve_fit(poly3, time_vec[skip_frames:], velocity_filtered)
         curvefit_data = poly3(time_vec[skip_frames:], *popt)
     else:
-        # Not enough points for polynomial fit, use filtered velocity directly
+        # Not enough points for polynomial fit
         curvefit_data = velocity_filtered
         popt = None
 else:
-    # Very few frames, just compute velocity from all points
+    # Very few frames: use all available data
     velocity = np.gradient(yloc, time_vec)
     velocity_filtered = np.gradient(yloc_filtered, time_vec)
     curvefit_data = velocity_filtered
     skip_frames = 0
     popt = None
 
-# Plot velocity vs time
+# Plot velocity vs time to visualize ball's motion
 plt.figure(3, figsize=(6, 3.5))
 plt.plot(time_vec[skip_frames:], velocity, 'b.', label='Original Velocity')
 plt.plot(time_vec[skip_frames:], velocity_filtered, 'r.', label='Filtered Velocity', linewidth=1.5)
@@ -340,8 +304,8 @@ plt.title('Velocity vs Time (Smoothed)')
 plt.legend()
 plt.grid(True)
 
-# --- NEW CODE FOR PLOTTING DIAMETER ---
-# Check if there are diameter measurements before plotting
+# Plot measured ball diameter over time
+# This helps verify that ball size detection was consistent
 if len(ball_diameters_pixels) > 0:
     plt.figure(4, figsize=(6, 3.5))
     plt.plot(time_vec, ball_diameters_pixels, 'go-')
@@ -351,9 +315,9 @@ if len(ball_diameters_pixels) > 0:
     plt.grid(True)
 else:
     print("\nNo ball diameters were measured, so a graph could not be created.")
-# --- END OF NEW CODE ---
 
-# --- CONFIDENCE TRACKING PLOT ---
+# Plot tracking confidence over time
+# Shows quality of ball detection throughout the video
 if len(confidences) > 0:
     plt.figure(5, figsize=(6, 3.5))
     plt.plot(time_vec, confidences, 'bo-')
@@ -365,12 +329,12 @@ if len(confidences) > 0:
     plt.legend()
     plt.ylim([0, 1])
     plt.grid(True)
-# --- END CONFIDENCE PLOT ---
 
-
+# Display all plots
 plt.show()
 
-# Calculate the average diameter from the collected measurements
+# Calculate average ball diameter in pixels
+# This is needed to convert pixel measurements to real-world units
 if ball_diameters_pixels:
     average_diameter = np.mean(ball_diameters_pixels)
     print(f"\nAverage ball diameter from analyzed frames: {average_diameter:.2f} pixels")
@@ -379,48 +343,98 @@ else:
 
 print(f"Final filtered velocity: {velocity_filtered[-1]:.2f} pixels/s")
 
-############################
-#        Constants         #
-############################
+# ==============================================================================
+# STEP 5: Viscosity Calculation Using Stokes' Law
+# ==============================================================================
 
-rldiameter = float(input("real diameter of your ball in mm: ")) #3 for me
-pdiameter = average_diameter
-g = float(input("g value in your area: ")) #9.79 in mine
-densityb = float(input("density of your ball: ")) #880 for me
-densityl = float(input("density of your liquid: ")) #872 for me
-pixeltomm = rldiameter / pdiameter
-mmvelocity = velocity_filtered[-1] * pixeltomm
-viscosity = (rldiameter / 1000) ** 2 * g * (densityb - densityl) / (18 * mmvelocity / 1000)
-print(f"Final mmtopixel: {pixeltomm} mm in a pixel")
-print(f"Final mm velocity: {mmvelocity} mm/s")
-print(f"Final Fluid Viscosity: {viscosity} mm/s")
-cal = input("Was this a calibration test? ")
-if cal.strip().lower().__eq__('yes'):
-    temp = float(input("What temperature was the liquid at (°C)? "))
-    m40 = float(input("Manufacturer value at 40°C (in cP)? "))
-    m100 = float(input("Manufacturer value at 100°C (in cP)? "))
+# Get physical parameters from user
+# These are needed to convert pixel measurements to real-world values
+real_diameter_mm = float(input("real diameter of your ball in mm: "))  # Real ball diameter (e.g., 3 mm)
+pixel_diameter = average_diameter  # Ball diameter in pixels (measured from video)
+g = float(input("g value in your area: "))  # Local gravity in m/s² (e.g., 9.79)
+ball_density_kg_m3 = float(input("density of your ball: "))  # Ball density in kg/m³ (e.g., 880)
+liquid_density_kg_m3 = float(input("density of your liquid: "))  # Liquid density in kg/m³ (e.g., 872)
 
-    # Constants
+# Validate physical parameters
+if real_diameter_mm <= 0:
+    raise ValueError(f"Invalid ball diameter: {real_diameter_mm} mm (must be positive)")
+if real_diameter_mm > 50:
+    print(f"Warning: Ball diameter ({real_diameter_mm} mm) is unusually large. Are you sure?")
+
+if g <= 0 or g > 15:
+    raise ValueError(f"Invalid gravity: {g} m/s² (typical range: 9.78-9.82 m/s²)")
+
+if ball_density_kg_m3 <= 0:
+    raise ValueError(f"Invalid ball density: {ball_density_kg_m3} kg/m³ (must be positive)")
+if liquid_density_kg_m3 <= 0:
+    raise ValueError(f"Invalid liquid density: {liquid_density_kg_m3} kg/m³ (must be positive)")
+
+if ball_density_kg_m3 <= liquid_density_kg_m3:
+    raise ValueError(f"Ball density ({ball_density_kg_m3} kg/m³) must be greater than liquid density ({liquid_density_kg_m3} kg/m³) for the ball to sink")
+
+# Calculate pixel-to-millimeter conversion factor
+mm_per_pixel = real_diameter_mm / pixel_diameter
+
+# Convert velocity from pixels/s to mm/s
+velocity_mm_s = velocity_filtered[-1] * mm_per_pixel
+
+# Calculate viscosity using Stokes' Law for a falling sphere
+# Formula: η = (d²g(ρ_ball - ρ_fluid)) / (18v)
+# Where:
+#   η = dynamic viscosity (Pa·s)
+#   d = ball diameter (m)
+#   g = gravitational acceleration (m/s²)
+#   ρ_ball, ρ_fluid = densities (kg/m³)
+#   v = terminal velocity (m/s)
+viscosity = (real_diameter_mm / 1000) ** 2 * g * (ball_density_kg_m3 - liquid_density_kg_m3) / (18 * velocity_mm_s / 1000)
+
+# Display results
+print(f"Final mm per pixel: {mm_per_pixel} mm/pixel")
+print(f"Final velocity: {velocity_mm_s} mm/s")
+print(f"Final Fluid Viscosity: {viscosity} Pa·s")
+
+# ==============================================================================
+# STEP 6: Calibration Mode (Optional)
+# ==============================================================================
+# If this is a calibration test with a fluid of known viscosity,
+# we can validate our measurement using the Arrhenius equation
+
+is_calibration = input("Was this a calibration test? ")
+if is_calibration.strip().lower().__eq__('yes'):
+    # Get calibration data
+    test_temperature_C = float(input("What temperature was the liquid at (°C)? "))
+    manufacturer_visc_40C_cP = float(input("Manufacturer value at 40°C (in cP)? "))
+    manufacturer_visc_100C_cP = float(input("Manufacturer value at 100°C (in cP)? "))
+
+    # Universal gas constant
     R = 8.314  # J/mol·K
 
-    # Convert to Kelvin
-    T40 = 40 + 273.15
-    T100 = 100 + 273.15
-    T = temp + 273.15
+    # Convert all temperatures to Kelvin
+    # (Arrhenius equation requires absolute temperature)
+    T_40C_kelvin = 40 + 273.15
+    T_100C_kelvin = 100 + 273.15
+    test_temperature_kelvin = test_temperature_C + 273.15
 
-    # Convert viscosities from cP → Pa·s
-    m40 *= 1e-3
-    m100 *= 1e-3
+    # Convert viscosities from centipoise (cP) to Pascal-seconds (Pa·s)
+    # 1 cP = 0.001 Pa·s
+    manufacturer_visc_40C_Pa_s = manufacturer_visc_40C_cP * 1e-3
+    manufacturer_visc_100C_Pa_s = manufacturer_visc_100C_cP * 1e-3
 
-    # Calculate activation energy and pre-exponential factor
-    Ea = R * math.log(m40 / m100) / (1 / T40 - 1 / T100)
-    A = m40 / math.exp(Ea / (R * T40))
+    # Calculate Arrhenius equation parameters from manufacturer data
+    # Arrhenius equation: η(T) = A * exp(Ea / (R*T))
+    # Using two known points, we can solve for Ea and A
+    activation_energy = R * math.log(manufacturer_visc_40C_Pa_s / manufacturer_visc_100C_Pa_s) / (1 / T_40C_kelvin - 1 / T_100C_kelvin)
+    pre_exponential_factor = manufacturer_visc_40C_Pa_s / math.exp(activation_energy / (R * T_40C_kelvin))
 
-    # Calculate viscosity at the desired temperature (in Pa·s)
-    calculated_visc = A * math.exp(Ea / (R * T))
+    # Calculate expected viscosity at the test temperature
+    # This is what the manufacturer's data predicts
+    expected_viscosity = pre_exponential_factor * math.exp(activation_energy / (R * test_temperature_kelvin))
 
-    print(f"Activation Energy (Ea): {Ea:.2f} J/mol")
-    print(f"Pre-exponential Factor (A): {A:.6e} Pa·s")
-    print(f"Viscosity at {temp}°C: {calculated_visc:.6f} Pa·s")
-    calculated_error = math.fabs((calculated_visc - viscosity)/calculated_visc)
-    print(f"Relative error between calculated and observed viscosity: {calculated_error}")
+    # Display calibration results
+    print(f"Activation Energy (Ea): {activation_energy:.2f} J/mol")
+    print(f"Pre-exponential Factor (A): {pre_exponential_factor:.6e} Pa·s")
+    print(f"Expected viscosity at {test_temperature_C}°C: {expected_viscosity:.6f} Pa·s")
+
+    # Calculate relative error to assess measurement accuracy
+    relative_error = math.fabs((expected_viscosity - viscosity) / expected_viscosity)
+    print(f"Relative error between expected and measured viscosity: {relative_error:.4f} ({relative_error*100:.2f}%)")
